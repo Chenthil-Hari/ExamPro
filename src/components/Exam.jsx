@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AlertCircle, Clock, Maximize, Flag } from 'lucide-react';
 
-export default function Exam({ stream, questions: initialQuestions, onComplete }) {
+export default function Exam({ stream, onComplete }) {
   const [questions, setQuestions] = useState([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState({});
@@ -11,6 +11,7 @@ export default function Exam({ stream, questions: initialQuestions, onComplete }
   const [timeLeft, setTimeLeft] = useState(stream.duration * 60);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [warnings, setWarnings] = useState(0);
+  const [error, setError] = useState(null);
 
   // Initialize Exam
   useEffect(() => {
@@ -34,44 +35,59 @@ export default function Exam({ stream, questions: initialQuestions, onComplete }
       }
     }
 
-    // Shuffle options & questions (per session)
-    const shuffled = [...initialQuestions].sort(() => Math.random() - 0.5).map(q => {
-      const newQ = { ...q };
-      if (q.options) {
-        const optionsWithCorrect = q.options.map((opt, idx) => ({
-          opt,
-          isCorrect: q.correct.includes(idx)
-        })).sort(() => Math.random() - 0.5);
+    const loadQuestions = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+        const res = await fetch(`${apiUrl}/questions/${stream.id}`);
+        const data = await res.json();
+        
+        if (!data.success || !data.questions.length) {
+          throw new Error('Failed to fetch questions');
+        }
 
-        newQ.options = optionsWithCorrect.map(o => o.opt);
-        newQ.correct = optionsWithCorrect
-          .map((o, idx) => (o.isCorrect ? idx : -1))
-          .filter(idx => idx !== -1);
+        // Shuffle options & questions (per session)
+        const shuffled = [...data.questions].sort(() => Math.random() - 0.5).map(q => {
+          const newQ = { ...q };
+          if (q.options) {
+            const optionsWithCorrect = q.options.map((opt, idx) => ({
+              opt,
+              isCorrect: q.correct.includes(idx)
+            })).sort(() => Math.random() - 0.5);
+
+            newQ.options = optionsWithCorrect.map(o => o.opt);
+            newQ.correct = optionsWithCorrect
+              .map((o, idx) => (o.isCorrect ? idx : -1))
+              .filter(idx => idx !== -1);
+          }
+          return newQ;
+        });
+
+        const initialStatus = {};
+        shuffled.forEach((q, i) => { initialStatus[i] = 'not_visited'; });
+        initialStatus[0] = 'not_answered';
+
+        setQuestions(shuffled);
+        setStatus(initialStatus);
+        
+        const startTime = Date.now();
+        const initialState = {
+          streamId: stream.id,
+          questions: shuffled,
+          answers: {},
+          status: initialStatus,
+          timeSpent: {},
+          currentIdx: 0,
+          startTime,
+          warnings: 0
+        };
+        localStorage.setItem('exam_state', JSON.stringify(initialState));
+      } catch (err) {
+        setError(err.message);
       }
-      return newQ;
-    });
-
-    const initialStatus = {};
-    shuffled.forEach((q, i) => { initialStatus[i] = 'not_visited'; });
-    initialStatus[0] = 'not_answered';
-
-    setQuestions(shuffled);
-    setStatus(initialStatus);
-    
-    const startTime = Date.now();
-    const initialState = {
-      streamId: stream.id,
-      questions: shuffled,
-      answers: {},
-      status: initialStatus,
-      timeSpent: {},
-      currentIdx: 0,
-      startTime,
-      warnings: 0
     };
-    localStorage.setItem('exam_state', JSON.stringify(initialState));
 
-  }, [stream.id, initialQuestions, stream.duration]);
+    loadQuestions();
+  }, [stream.id, stream.duration]);
 
   // Sync state to localstorage
   useEffect(() => {

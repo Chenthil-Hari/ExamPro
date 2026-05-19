@@ -77,7 +77,6 @@ function App() {
         {user && stream && !examResult && (
           <Exam 
             stream={stream} 
-            questions={questionBank[stream.id]} 
             onComplete={handleExamComplete} 
           />
         )}

@@ -5,6 +5,7 @@ const cors = require('cors');
 
 const User = require('./models/User');
 const Result = require('./models/Result');
+const Question = require('./models/Question');
 
 const app = express();
 app.use(cors());
@@ -64,6 +65,22 @@ app.get('/api/users/:userId/results', async (req, res) => {
   try {
     const results = await Result.find({ userId: req.params.userId }).sort({ completedAt: -1 });
     res.json({ success: true, results });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4. Get Randomized Questions for a Stream
+app.get('/api/questions/:streamId', async (req, res) => {
+  try {
+    const { streamId } = req.params;
+    const questions = await Question.find({ streamId });
+    
+    // Shuffle and pick 5 random questions
+    const shuffled = questions.sort(() => Math.random() - 0.5);
+    const subset = shuffled.slice(0, 5);
+    
+    res.json({ success: true, questions: subset });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
