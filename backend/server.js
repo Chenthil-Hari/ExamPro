@@ -88,11 +88,12 @@ app.get('/api/users/:userId/results', async (req, res) => {
 app.get('/api/questions/:streamId', async (req, res) => {
   try {
     const { streamId } = req.params;
+    const limit = parseInt(req.query.limit, 10) || 5;
     const questions = await Question.find({ streamId });
     
-    // Shuffle and pick 5 random questions
+    // Shuffle and pick requested limit of questions
     const shuffled = questions.sort(() => Math.random() - 0.5);
-    const subset = shuffled.slice(0, 5);
+    const subset = shuffled.slice(0, limit);
     
     res.json({ success: true, questions: subset });
   } catch (error) {

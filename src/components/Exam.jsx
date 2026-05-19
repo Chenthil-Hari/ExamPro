@@ -62,7 +62,7 @@ export default function Exam({ stream, user, onComplete }) {
     const loadQuestions = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
-        const res = await fetch(`${apiUrl}/questions/${stream.id}`);
+        const res = await fetch(`${apiUrl}/questions/${stream.id}?limit=${stream.totalQuestions || 5}`);
         const data = await res.json();
         
         if (!data.success || !data.questions.length) {
