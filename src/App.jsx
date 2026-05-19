@@ -43,6 +43,12 @@ function App() {
     localStorage.setItem('exam_session', JSON.stringify({ user, examResult: result }));
   };
 
+  const handleBackToDashboard = () => {
+    setExamResult(null);
+    setStream(null);
+    localStorage.setItem('exam_session', JSON.stringify({ user }));
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('exam_session');
     localStorage.removeItem('exam_state'); // Clear active exam
@@ -98,7 +104,7 @@ function App() {
             onComplete={handleExamComplete} 
           />
         )}
-        {user && examResult && <Results result={examResult} user={user} onHome={handleLogout} />}
+        {user && examResult && <Results result={examResult} user={user} onHome={handleBackToDashboard} />}
       </main>
     </div>
   );
