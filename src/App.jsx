@@ -4,6 +4,7 @@ import StreamSelection from './components/StreamSelection';
 import Exam from './components/Exam';
 import Results from './components/Results';
 import Profile from './components/Profile';
+import LandingPage from './components/LandingPage';
 import { streams, questionBank } from './questions';
 
 function App() {
@@ -11,6 +12,7 @@ function App() {
   const [stream, setStream] = useState(null);
   const [examResult, setExamResult] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [started, setStarted] = useState(false);
 
   // Restore session
   useEffect(() => {
@@ -55,6 +57,11 @@ function App() {
           <div style={{ width: 32, height: 32, background: 'var(--primary)', borderRadius: '0.25rem' }}></div>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>ProExam</h1>
         </div>
+        {!user && started && (
+          <button className="btn btn-outline" onClick={() => setStarted(false)}>
+            Back to Home
+          </button>
+        )}
         {user && (
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <span style={{ color: 'var(--text-muted)' }}>{user.name} ({user.id})</span>
@@ -71,7 +78,8 @@ function App() {
       </header>
       
       <main>
-        {!user && <Login onLogin={handleLogin} />}
+        {!user && !started && <LandingPage onGetStarted={() => setStarted(true)} />}
+        {!user && started && <Login onLogin={handleLogin} />}
         {user && showProfile && <Profile user={user} onBack={() => setShowProfile(false)} />}
         {user && !stream && !examResult && !showProfile && <StreamSelection streams={streams} onSelect={handleStreamSelect} />}
         {user && stream && !examResult && (
