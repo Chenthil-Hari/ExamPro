@@ -11,7 +11,7 @@ export default function Login({ onLogin }) {
     
     const id = `STU_${username}`;
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
       const res = await fetch(`${apiUrl}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -34,7 +34,7 @@ export default function Login({ onLogin }) {
     if (guestName) {
       try {
         const id = `GST_${randomId}`;
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
         const res = await fetch(`${apiUrl}/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

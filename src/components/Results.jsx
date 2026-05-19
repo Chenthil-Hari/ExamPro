@@ -53,7 +53,7 @@ export default function Results({ result, user, onHome }) {
   useEffect(() => {
     if (!sentRef.current && user) {
       sentRef.current = true;
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
       fetch(`${apiUrl}/results`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
