@@ -15,7 +15,7 @@ export default function Login({ onLogin }) {
       const res = await fetch(`${apiUrl}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, name: username, isGuest: false })
+        body: JSON.stringify({ id, name: username, password, isGuest: false })
       });
       const data = await res.json();
       if (data.success) {

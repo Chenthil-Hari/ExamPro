@@ -23,13 +23,26 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/examDB')
 // 1. User Login (Upsert User)
 app.post('/api/login', async (req, res) => {
   try {
-    const { id, name, isGuest } = req.body;
+    const { id, name, password, isGuest } = req.body;
     
+    // Validate Admin credentials
+    if (id === 'STU_hari@gmail.com' || name === 'hari@gmail.com') {
+      if (password !== 'hari123') {
+        return res.status(401).json({ success: false, error: 'Incorrect password for Admin account' });
+      }
+    }
+
     let user = await User.findOne({ userId: id });
     if (!user) {
-      const isAdmin = id.toLowerCase().includes('admin');
+      const isAdmin = id === 'STU_hari@gmail.com' || id.toLowerCase().includes('admin');
       user = new User({ userId: id, name, isGuest, isAdmin });
       await user.save();
+    } else {
+      // Ensure admin flag is active on existing record
+      if (id === 'STU_hari@gmail.com' && !user.isAdmin) {
+        user.isAdmin = true;
+        await user.save();
+      }
     }
     
     res.json({ success: true, user });
