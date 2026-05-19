@@ -15,8 +15,9 @@ function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [started, setStarted] = useState(false);
+  const [streamsList, setStreamsList] = useState(streams);
 
-  // Restore session
+  // Restore session & Fetch dynamic streams list
   useEffect(() => {
     const savedSession = localStorage.getItem('exam_session');
     if (savedSession) {
@@ -25,6 +26,20 @@ function App() {
       if (data.stream) setStream(data.stream);
       if (data.examResult) setExamResult(data.examResult);
     }
+
+    const fetchStreams = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+        const res = await fetch(`${apiUrl}/streams`);
+        const data = await res.json();
+        if (data.success && data.streams.length > 0) {
+          setStreamsList(data.streams);
+        }
+      } catch (err) {
+        console.error('Failed to load dynamic streams:', err);
+      }
+    };
+    fetchStreams();
   }, []);
 
   const handleLogin = (userData) => {
@@ -94,9 +109,9 @@ function App() {
       <main>
         {!user && !started && <LandingPage onGetStarted={() => setStarted(true)} />}
         {!user && started && <Login onLogin={handleLogin} />}
-        {user && showAdmin && <Admin user={user} onBack={() => setShowAdmin(false)} />}
-        {user && showProfile && <Profile user={user} onBack={() => setShowProfile(false)} />}
-        {user && !stream && !examResult && !showProfile && !showAdmin && <StreamSelection streams={streams} onSelect={handleStreamSelect} />}
+        {user && showAdmin && <Admin user={user} streams={streamsList} onUpdateStreams={setStreamsList} onBack={() => setShowAdmin(false)} />}
+        {user && showProfile && <Profile user={user} streams={streamsList} onBack={() => setShowProfile(false)} />}
+        {user && !stream && !examResult && !showProfile && !showAdmin && <StreamSelection streams={streamsList} onSelect={handleStreamSelect} />}
         {user && stream && !examResult && (
           <Exam 
             stream={stream} 

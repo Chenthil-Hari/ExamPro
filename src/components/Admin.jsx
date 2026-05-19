@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, Plus, Edit2, Trash2, Check, X, ShieldAlert, FileText, CheckCircle, AlertTriangle, HelpCircle, Upload, Loader2 } from 'lucide-react';
-import { streams } from '../questions';
 
 const recommendedSubjects = {
   neet: ['Biology', 'Physics', 'Chemistry'],
@@ -37,8 +36,8 @@ const loadTesseract = () => {
   });
 };
 
-export default function Admin({ user, onBack }) {
-  const [activeTab, setActiveTab] = useState('users'); // 'users', 'logs', 'questions'
+export default function Admin({ user, streams, onUpdateStreams, onBack }) {
+  const [activeTab, setActiveTab] = useState('users'); // 'users', 'logs', 'questions', 'settings'
   const [users, setUsers] = useState([]);
   const [logs, setLogs] = useState([]);
   const [questions, setQuestions] = useState([]);
@@ -49,6 +48,14 @@ export default function Admin({ user, onBack }) {
   const [editingQuestion, setEditingQuestion] = useState(null); // null, 'add', or { questionObject }
   const [importMode, setImportMode] = useState('single'); // 'single', 'bulk'
   
+  // Stream Settings Config State
+  const [editingStreamConfig, setEditingStreamConfig] = useState(null);
+  const [streamFormTotalQ, setStreamFormTotalQ] = useState(5);
+  const [streamFormDuration, setStreamFormDuration] = useState(10);
+  const [streamFormCorrect, setStreamFormCorrect] = useState(4);
+  const [streamFormWrong, setStreamFormWrong] = useState(-1);
+  const [streamFormDifficulty, setStreamFormDifficulty] = useState('Medium');
+
   // Single Question Form State
   const [formStream, setFormStream] = useState('neet');
   const [formType, setFormType] = useState('MCQ');
@@ -94,6 +101,11 @@ export default function Admin({ user, onBack }) {
         const res = await fetch(`${apiUrl}/admin/questions`);
         const data = await res.json();
         if (data.success) setQuestions(data.questions);
+      } else if (activeTab === 'settings') {
+        // dynamic streams loading
+        const res = await fetch(`${apiUrl}/streams`);
+        const data = await res.json();
+        if (data.success) onUpdateStreams(data.streams);
       }
     } catch (err) {
       console.error(err);
@@ -152,6 +164,15 @@ export default function Admin({ user, onBack }) {
     setFormOptions(q.options || ['', '', '', '']);
     setFormCorrect(q.correct.join(', '));
     setFormNoNegative(!!q.noNegative);
+  };
+
+  const openEditStream = (s) => {
+    setEditingStreamConfig(s);
+    setStreamFormTotalQ(s.totalQuestions);
+    setStreamFormDuration(s.duration);
+    setStreamFormCorrect(s.marking?.correct ?? 4);
+    setStreamFormWrong(s.marking?.wrong ?? -1);
+    setStreamFormDifficulty(s.difficulty ?? 'Medium');
   };
 
   const handleStreamChange = (streamId) => {
@@ -466,6 +487,41 @@ export default function Admin({ user, onBack }) {
     }
   };
 
+  // Update Stream settings config submit
+  const handleStreamConfigSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${apiUrl}/admin/streams/${editingStreamConfig.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          totalQuestions: parseInt(streamFormTotalQ, 10),
+          duration: parseInt(streamFormDuration, 10),
+          difficulty: streamFormDifficulty,
+          marking: {
+            correct: parseInt(streamFormCorrect, 10),
+            wrong: parseInt(streamFormWrong, 10)
+          }
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Refetch streams list to update parent App.jsx state
+        const resStreams = await fetch(`${apiUrl}/streams`);
+        const dataStreams = await resStreams.json();
+        if (dataStreams.success) {
+          onUpdateStreams(dataStreams.streams);
+        }
+        setEditingStreamConfig(null);
+      } else {
+        alert('Failed to update stream configuration: ' + data.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error updating stream configuration.');
+    }
+  };
+
   // Delete Question
   const handleDelete = async (qId) => {
     if (!window.confirm('Are you sure you want to delete this question?')) return;
@@ -522,7 +578,7 @@ export default function Admin({ user, onBack }) {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '2rem', gap: '1.5rem' }}>
-        {['users', 'logs', 'questions'].map((tab) => (
+        {['users', 'logs', 'questions', 'settings'].map((tab) => (
           <button 
             key={tab}
             style={{ 
@@ -535,9 +591,9 @@ export default function Admin({ user, onBack }) {
               cursor: 'pointer',
               textTransform: 'capitalize'
             }}
-            onClick={() => { setActiveTab(tab); setEditingQuestion(null); }}
+            onClick={() => { setActiveTab(tab); setEditingQuestion(null); setEditingStreamConfig(null); }}
           >
-            {tab === 'logs' ? 'Exam Attempts' : tab}
+            {tab === 'logs' ? 'Exam Attempts' : tab === 'settings' ? 'Exam Settings' : tab}
           </button>
         ))}
       </div>
@@ -878,17 +934,17 @@ Answer: a, c`}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                            <span style={{ padding: '0.2rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(29, 78, 216, 0.1)', color: 'var(--primary)' }}>
+                            <span style={{ padding: '0.2/rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(29, 78, 216, 0.1)', color: 'var(--primary)' }}>
                               {getStreamName(q.streamId)}
                             </span>
-                            <span style={{ padding: '0.2rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(107, 114, 128, 0.1)', color: 'var(--text-muted)' }}>
+                            <span style={{ padding: '0.2/rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(107, 114, 128, 0.1)', color: 'var(--text-muted)' }}>
                               {q.subject}
                             </span>
-                            <span style={{ padding: '0.2rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(168, 85, 247, 0.1)', color: 'var(--status-marked)' }}>
+                            <span style={{ padding: '0.2/rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(168, 85, 247, 0.1)', color: 'var(--status-marked)' }}>
                               {q.type}
                             </span>
                             {q.noNegative && (
-                              <span style={{ padding: '0.2rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(245, 158, 11, 0.1)', color: '#d97706' }}>
+                              <span style={{ padding: '0.2/rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(245, 158, 11, 0.1)', color: '#d97706' }}>
                                 No Negative Marking
                               </span>
                             )}
@@ -1012,7 +1068,7 @@ Answer: a, c`}
             </tbody>
           </table>
         </div>
-      ) : (
+      ) : activeTab === 'questions' ? (
         /* Questions Management List */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {questions.map((q) => (
@@ -1068,6 +1124,98 @@ Answer: a, c`}
             </div>
           ))}
         </div>
+      ) : (
+        /* Exam settings configurations tab */
+        editingStreamConfig ? (
+          <div className="card">
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>
+              Edit Exam Settings: {editingStreamConfig.name}
+            </h3>
+
+            <form onSubmit={handleStreamConfigSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Number of Questions (Exam Length)</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    required 
+                    value={streamFormTotalQ} 
+                    onChange={(e) => setStreamFormTotalQ(e.target.value)} 
+                    style={{ width: '100%' }} 
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Exam Duration (Minutes)</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    required 
+                    value={streamFormDuration} 
+                    onChange={(e) => setStreamFormDuration(e.target.value)} 
+                    style={{ width: '100%' }} 
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Difficulty Level</label>
+                  <select value={streamFormDifficulty} onChange={(e) => setStreamFormDifficulty(e.target.value)} style={{ width: '100%' }}>
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                    <option value="Expert">Expert</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Marks for Correct Answer</label>
+                  <input 
+                    type="number" 
+                    required 
+                    value={streamFormCorrect} 
+                    onChange={(e) => setStreamFormCorrect(e.target.value)} 
+                    style={{ width: '100%' }} 
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Marks for Incorrect Answer (e.g. -1)</label>
+                  <input 
+                    type="number" 
+                    required 
+                    value={streamFormWrong} 
+                    onChange={(e) => setStreamFormWrong(e.target.value)} 
+                    style={{ width: '100%' }} 
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                <button type="submit" className="btn btn-primary">Save Settings</button>
+                <button type="button" className="btn btn-outline" onClick={() => setEditingStreamConfig(null)}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {streams.map((s) => (
+              <div key={s.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                <div>
+                  <h4 style={{ fontSize: '1.125rem', fontWeight: 'bold', color: 'var(--primary)', marginBottom: '0.25rem' }}>{s.name}</h4>
+                  <div style={{ display: 'flex', gap: '1.5rem', color: 'var(--text-muted)', fontSize: '0.875rem', flexWrap: 'wrap' }}>
+                    <span>Questions: <strong>{s.totalQuestions} items</strong></span>
+                    <span>Duration: <strong>{s.duration} mins</strong></span>
+                    <span>Difficulty: <strong>{s.difficulty}</strong></span>
+                    <span>Marking: <strong>+{s.marking?.correct ?? 4} / {s.marking?.wrong ?? -1}</strong></span>
+                  </div>
+                </div>
+                <button className="btn btn-outline" onClick={() => openEditStream(s)}>
+                  <Edit2 size={16} style={{ marginRight: '0.25rem' }} /> Edit Settings
+                </button>
+              </div>
+            ))}
+          </div>
+        )
       )}
     </div>
   );

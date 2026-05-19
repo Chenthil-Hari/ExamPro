@@ -6,6 +6,16 @@ const cors = require('cors');
 const User = require('./models/User');
 const Result = require('./models/Result');
 const Question = require('./models/Question');
+const Stream = require('./models/Stream');
+
+const defaultStreams = [
+  { id: 'neet', name: 'NEET', subjectCount: 3, totalQuestions: 5, duration: 10, difficulty: 'Medium', marking: { correct: 4, wrong: -1 } },
+  { id: 'jee_main', name: 'JEE Main', subjectCount: 3, totalQuestions: 5, duration: 10, difficulty: 'Hard', marking: { correct: 4, wrong: -1 } },
+  { id: 'jee_advanced', name: 'JEE Advanced', subjectCount: 3, totalQuestions: 5, duration: 10, difficulty: 'Expert', marking: { correct: 4, wrong: -1 } },
+  { id: 'iaat', name: 'IAAT', subjectCount: 2, totalQuestions: 5, duration: 10, difficulty: 'Medium', marking: { correct: 3, wrong: -1 } },
+  { id: 'cuet', name: 'CUET', subjectCount: 3, totalQuestions: 5, duration: 10, difficulty: 'Easy', marking: { correct: 5, wrong: -1 } },
+  { id: 'bitsat', name: 'BITSAT', subjectCount: 4, totalQuestions: 5, duration: 10, difficulty: 'Medium', marking: { correct: 3, wrong: -1 } }
+];
 
 const app = express();
 app.use(cors());
@@ -19,6 +29,20 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/examDB')
 .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
 // --- ROUTES ---
+
+// 0. Get Stream list (seeds database if empty)
+app.get('/api/streams', async (req, res) => {
+  try {
+    let streamsList = await Stream.find({});
+    if (streamsList.length === 0) {
+      await Stream.insertMany(defaultStreams);
+      streamsList = await Stream.find({});
+    }
+    res.json({ success: true, streams: streamsList });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // 1. User Login (Upsert User)
 app.post('/api/login', async (req, res) => {
@@ -201,11 +225,17 @@ app.put('/api/admin/questions/:id', async (req, res) => {
   }
 });
 
-// 12. Delete a question
-app.delete('/api/admin/questions/:id', async (req, res) => {
+// 13. Update exam stream settings
+app.put('/api/admin/streams/:id', async (req, res) => {
   try {
-    await Question.findByIdAndDelete(req.params.id);
-    res.json({ success: true });
+    const { totalQuestions, duration, difficulty, marking } = req.body;
+    const stream = await Stream.findOneAndUpdate(
+      { id: req.params.id },
+      { totalQuestions, duration, difficulty, marking },
+      { new: true }
+    );
+    if (!stream) return res.status(404).json({ success: false, error: 'Stream not found' });
+    res.json({ success: true, stream });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
