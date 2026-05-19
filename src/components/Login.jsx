@@ -28,27 +28,12 @@ export default function Login({ onLogin }) {
     }
   };
 
-  const handleGuestLogin = async () => {
+  const handleGuestLogin = () => {
     const randomId = Math.floor(Math.random() * 10000);
     const guestName = prompt('Enter your name for Guest session', `Guest_${randomId}`);
     if (guestName) {
-      try {
-        const id = `GST_${randomId}`;
-        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
-        const res = await fetch(`${apiUrl}/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, name: guestName, isGuest: true })
-        });
-        const data = await res.json();
-        if (data.success) {
-          onLogin(data.user);
-        } else {
-          alert('Login failed: ' + data.error);
-        }
-      } catch (err) {
-        alert('Error connecting to server');
-      }
+      const guestUser = { id: `GST_${randomId}`, name: guestName, isGuest: true, isAdmin: false };
+      onLogin(guestUser);
     }
   };
 

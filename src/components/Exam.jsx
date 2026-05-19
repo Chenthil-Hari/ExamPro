@@ -17,6 +17,11 @@ export default function Exam({ stream, user, onComplete }) {
   // Load bookmarks
   useEffect(() => {
     if (!user) return;
+    if (user.isGuest) {
+      const localBookmarks = JSON.parse(localStorage.getItem('guest_bookmarks') || '[]');
+      setBookmarkedIds(localBookmarks.map(b => b._id || b));
+      return;
+    }
     const fetchBookmarks = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
@@ -239,7 +244,20 @@ export default function Exam({ stream, user, onComplete }) {
 
   const toggleBookmark = async () => {
     if (!user) return;
-    const questionId = questions[currentIdx]._id;
+    const currentQuestion = questions[currentIdx];
+    const questionId = currentQuestion._id;
+    if (user.isGuest) {
+      let localBookmarks = JSON.parse(localStorage.getItem('guest_bookmarks') || '[]');
+      const exists = localBookmarks.some(b => b._id === questionId);
+      if (exists) {
+        localBookmarks = localBookmarks.filter(b => b._id !== questionId);
+      } else {
+        localBookmarks.push(currentQuestion);
+      }
+      localStorage.setItem('guest_bookmarks', JSON.stringify(localBookmarks));
+      setBookmarkedIds(localBookmarks.map(b => b._id));
+      return;
+    }
     try {
       const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
       const res = await fetch(`${apiUrl}/users/${user.id}/bookmarks`, {

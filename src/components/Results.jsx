@@ -53,19 +53,34 @@ export default function Results({ result, user, onHome }) {
   useEffect(() => {
     if (!sentRef.current && user) {
       sentRef.current = true;
-      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
-      fetch(`${apiUrl}/results`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      if (!user.isGuest) {
+        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+        fetch(`${apiUrl}/results`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            streamId,
+            score,
+            totalPossible,
+            percentile: parseFloat(percentile),
+            timeSpent
+          })
+        }).catch(err => console.error('Failed to save result:', err));
+      } else {
+        const guestResults = JSON.parse(localStorage.getItem('guest_results') || '[]');
+        guestResults.push({
+          _id: 'GST_RES_' + Date.now(),
           userId: user.id,
           streamId,
           score,
           totalPossible,
           percentile: parseFloat(percentile),
-          timeSpent
-        })
-      }).catch(err => console.error('Failed to save result:', err));
+          timeSpent,
+          completedAt: new Date().toISOString()
+        });
+        localStorage.setItem('guest_results', JSON.stringify(guestResults));
+      }
     }
   }, [user, streamId, score, totalPossible, percentile, timeSpent]);
 

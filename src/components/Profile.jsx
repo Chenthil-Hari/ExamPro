@@ -11,6 +11,14 @@ export default function Profile({ user, onBack }) {
 
   useEffect(() => {
     const fetchProfileData = async () => {
+      if (user.isGuest) {
+        const localResults = JSON.parse(localStorage.getItem('guest_results') || '[]');
+        setResults(localResults);
+        const localBookmarks = JSON.parse(localStorage.getItem('guest_bookmarks') || '[]');
+        setBookmarks(localBookmarks);
+        setLoading(false);
+        return;
+      }
       try {
         const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
         
@@ -31,7 +39,7 @@ export default function Profile({ user, onBack }) {
       }
     };
     fetchProfileData();
-  }, [user.id]);
+  }, [user.id, user.isGuest]);
 
   // Statistics calculation
   const totalExams = results.length;
@@ -47,6 +55,13 @@ export default function Profile({ user, onBack }) {
   };
 
   const removeBookmark = async (questionId) => {
+    if (user.isGuest) {
+      let localBookmarks = JSON.parse(localStorage.getItem('guest_bookmarks') || '[]');
+      localBookmarks = localBookmarks.filter(b => b._id !== questionId);
+      localStorage.setItem('guest_bookmarks', JSON.stringify(localBookmarks));
+      setBookmarks(localBookmarks);
+      return;
+    }
     try {
       const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
       const res = await fetch(`${apiUrl}/users/${user.id}/bookmarks`, {
