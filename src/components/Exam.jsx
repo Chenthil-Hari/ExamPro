@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, Clock, Maximize, Flag } from 'lucide-react';
+import { AlertCircle, Clock, Maximize, Flag, Star } from 'lucide-react';
 
-export default function Exam({ stream, onComplete }) {
+export default function Exam({ stream, user, onComplete }) {
   const [questions, setQuestions] = useState([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState({});
@@ -12,6 +12,25 @@ export default function Exam({ stream, onComplete }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [warnings, setWarnings] = useState(0);
   const [error, setError] = useState(null);
+  const [bookmarkedIds, setBookmarkedIds] = useState([]);
+
+  // Load bookmarks
+  useEffect(() => {
+    if (!user) return;
+    const fetchBookmarks = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+        const res = await fetch(`${apiUrl}/users/${user.id}/bookmarks`);
+        const data = await res.json();
+        if (data.success) {
+          setBookmarkedIds(data.bookmarks.map(b => b._id || b));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchBookmarks();
+  }, [user]);
 
   // Initialize Exam
   useEffect(() => {
@@ -218,6 +237,25 @@ export default function Exam({ stream, onComplete }) {
     setStatus(prev => ({ ...prev, [currentIdx]: 'not_answered' }));
   };
 
+  const toggleBookmark = async () => {
+    if (!user) return;
+    const questionId = questions[currentIdx]._id;
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+      const res = await fetch(`${apiUrl}/users/${user.id}/bookmarks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questionId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBookmarkedIds(data.bookmarks);
+      }
+    } catch (err) {
+      console.error('Failed to toggle bookmark:', err);
+    }
+  };
+
   const handleSubmit = useCallback(() => {
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(()=>{});
@@ -255,6 +293,7 @@ export default function Exam({ stream, onComplete }) {
 
   const q = questions[currentIdx];
   const formatTime = (secs) => `${Math.floor(secs / 60).toString().padStart(2, '0')}:${(secs % 60).toString().padStart(2, '0')}`;
+  const isBookmarked = bookmarkedIds.includes(q._id);
 
   return (
     <div className="exam-grid fade-in">
@@ -262,7 +301,16 @@ export default function Exam({ stream, onComplete }) {
       <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
           <div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Question {currentIdx + 1}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Question {currentIdx + 1}</h2>
+              <button 
+                onClick={toggleBookmark}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0.25rem' }}
+                title={isBookmarked ? "Remove Bookmark" : "Bookmark Question"}
+              >
+                <Star size={18} fill={isBookmarked ? "#f59e0b" : "none"} color={isBookmarked ? "#f59e0b" : "var(--text-muted)"} />
+              </button>
+            </div>
             <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
               {q.subject} | Type: {q.type} | Marks: +{q.noNegative ? stream.marking.correct : stream.marking.correct} / {q.noNegative ? '0' : stream.marking.wrong}
             </span>
