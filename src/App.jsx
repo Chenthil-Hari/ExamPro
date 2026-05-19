@@ -3,12 +3,14 @@ import Login from './components/Login';
 import StreamSelection from './components/StreamSelection';
 import Exam from './components/Exam';
 import Results from './components/Results';
+import Profile from './components/Profile';
 import { streams, questionBank } from './questions';
 
 function App() {
   const [user, setUser] = useState(null);
   const [stream, setStream] = useState(null);
   const [examResult, setExamResult] = useState(null);
+  const [showProfile, setShowProfile] = useState(false);
 
   // Restore session
   useEffect(() => {
@@ -43,6 +45,7 @@ function App() {
     setUser(null);
     setStream(null);
     setExamResult(null);
+    setShowProfile(false);
   };
 
   return (
@@ -55,14 +58,22 @@ function App() {
         {user && (
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <span style={{ color: 'var(--text-muted)' }}>{user.name} ({user.id})</span>
-            {!stream && !examResult && <button className="btn btn-outline" onClick={handleLogout}>Logout</button>}
+            {!stream && !examResult && (
+              <>
+                <button className="btn btn-outline" onClick={() => setShowProfile(!showProfile)}>
+                  {showProfile ? 'Home' : 'Stats & Profile'}
+                </button>
+                <button className="btn btn-outline" onClick={handleLogout}>Logout</button>
+              </>
+            )}
           </div>
         )}
       </header>
       
       <main>
         {!user && <Login onLogin={handleLogin} />}
-        {user && !stream && !examResult && <StreamSelection streams={streams} onSelect={handleStreamSelect} />}
+        {user && showProfile && <Profile user={user} onBack={() => setShowProfile(false)} />}
+        {user && !stream && !examResult && !showProfile && <StreamSelection streams={streams} onSelect={handleStreamSelect} />}
         {user && stream && !examResult && (
           <Exam 
             stream={stream} 
