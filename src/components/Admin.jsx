@@ -996,7 +996,10 @@ Answer: a, c`}
           )}
         </div>
       ) : loading ? (
-        <div>Loading records...</div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem', gap: '1rem', color: 'var(--text-muted)' }}>
+          <Loader2 className="animate-spin" size={32} color="var(--primary)" />
+          <span style={{ fontWeight: '500' }}>Loading records...</span>
+        </div>
       ) : error ? (
         <div style={{ color: 'var(--danger)' }}>{error}</div>
       ) : activeTab === 'users' ? (

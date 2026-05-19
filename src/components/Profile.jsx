@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Award, BookOpen, Clock, ChevronLeft, Calendar, Trash2, CheckCircle, HelpCircle, Check } from 'lucide-react';
+import { Award, BookOpen, Clock, ChevronLeft, Calendar, Trash2, CheckCircle, HelpCircle, Check, Loader2 } from 'lucide-react';
 import { streams } from '../questions';
 
 export default function Profile({ user, onBack }) {
@@ -197,7 +197,10 @@ export default function Profile({ user, onBack }) {
       </div>
 
       {loading ? (
-        <div>Loading your profile data...</div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem', gap: '1rem', color: 'var(--text-muted)' }}>
+          <Loader2 className="animate-spin" size={32} color="var(--primary)" />
+          <span style={{ fontWeight: '500' }}>Loading your profile data...</span>
+        </div>
       ) : activeTab === 'history' ? (
         /* History Log */
         results.length === 0 ? (

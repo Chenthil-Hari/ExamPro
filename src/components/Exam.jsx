@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, Clock, Maximize, Flag, Star } from 'lucide-react';
+import { AlertCircle, Clock, Maximize, Flag, Star, Loader2 } from 'lucide-react';
 
 export default function Exam({ stream, user, onComplete }) {
   const [questions, setQuestions] = useState([]);
@@ -288,7 +288,14 @@ export default function Exam({ stream, user, onComplete }) {
   }, [answers, timeSpent, status, questions, stream.id, onComplete]);
 
   // Loading state
-  if (questions.length === 0) return <div>Loading exam...</div>;
+  if (questions.length === 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '1rem', color: 'var(--text-muted)' }}>
+        <Loader2 className="animate-spin" size={36} color="var(--primary)" />
+        <span style={{ fontWeight: '500', fontSize: '1.1rem' }}>Loading exam details and preparing instructions...</span>
+      </div>
+    );
+  }
 
   // Fullscreen enforcement
   if (!isFullscreen) {
