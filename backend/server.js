@@ -176,6 +176,20 @@ app.post('/api/admin/questions', async (req, res) => {
   }
 });
 
+// 10b. Bulk insert questions
+app.post('/api/admin/questions/bulk', async (req, res) => {
+  try {
+    const { questions } = req.body;
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ success: false, error: 'Invalid or empty questions array.' });
+    }
+    const inserted = await Question.insertMany(questions);
+    res.json({ success: true, count: inserted.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 11. Edit a question
 app.put('/api/admin/questions/:id', async (req, res) => {
   try {

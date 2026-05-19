@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Plus, Edit2, Trash2, Check, X, ShieldAlert, CheckSquare, Square } from 'lucide-react';
+import { ChevronLeft, Plus, Edit2, Trash2, Check, X, ShieldAlert, FileText, CheckCircle, AlertTriangle, HelpCircle } from 'lucide-react';
 import { streams } from '../questions';
 
 const recommendedSubjects = {
@@ -21,6 +21,9 @@ export default function Admin({ user, onBack }) {
 
   // Form State for Add/Edit Question
   const [editingQuestion, setEditingQuestion] = useState(null); // null, 'add', or { questionObject }
+  const [importMode, setImportMode] = useState('single'); // 'single', 'bulk'
+  
+  // Single Question Form State
   const [formStream, setFormStream] = useState('neet');
   const [formType, setFormType] = useState('MCQ');
   const [formSubject, setFormSubject] = useState('Biology');
@@ -28,8 +31,16 @@ export default function Admin({ user, onBack }) {
   const [formCustomSubject, setFormCustomSubject] = useState('');
   const [formText, setFormText] = useState('');
   const [formOptions, setFormOptions] = useState(['', '', '', '']);
-  const [formCorrect, setFormCorrect] = useState(''); // comma-separated indices or integer number
+  const [formCorrect, setFormCorrect] = useState('');
   const [formNoNegative, setFormNoNegative] = useState(false);
+
+  // Bulk Paste Form State
+  const [bulkText, setBulkText] = useState('');
+  const [parsedQuestions, setParsedQuestions] = useState([]);
+  const [bulkStream, setBulkStream] = useState('neet');
+  const [bulkSubject, setBulkSubject] = useState('Physics');
+  const [bulkCustomSubjectActive, setBulkCustomSubjectActive] = useState(false);
+  const [bulkCustomSubject, setBulkCustomSubject] = useState('');
 
   const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
 
@@ -69,6 +80,7 @@ export default function Admin({ user, onBack }) {
   // Open Add Question Form
   const openAdd = () => {
     setEditingQuestion('add');
+    setImportMode('single');
     setFormStream('neet');
     setFormType('MCQ');
     setFormSubject('Biology');
@@ -78,11 +90,20 @@ export default function Admin({ user, onBack }) {
     setFormOptions(['', '', '', '']);
     setFormCorrect('');
     setFormNoNegative(false);
+
+    // reset bulk state
+    setBulkText('');
+    setParsedQuestions([]);
+    setBulkStream('neet');
+    setBulkSubject('Physics');
+    setBulkCustomSubjectActive(false);
+    setBulkCustomSubject('');
   };
 
   // Open Edit Question Form
   const openEdit = (q) => {
     setEditingQuestion(q);
+    setImportMode('single');
     setFormStream(q.streamId);
     setFormType(q.type);
     
@@ -133,7 +154,145 @@ export default function Admin({ user, onBack }) {
     }
   };
 
-  // Submit Question Add/Edit
+  // Parsing Bulk Input
+  const handleParseBulk = () => {
+    if (!bulkText.trim()) return alert('Please paste some text to parse.');
+
+    const finalDefaultSubject = bulkCustomSubjectActive ? bulkCustomSubject.trim() : bulkSubject;
+    const blocks = bulkText.split(/\n\s*\n/);
+    const results = [];
+
+    for (let block of blocks) {
+      block = block.trim();
+      if (!block) continue;
+
+      const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+      if (lines.length === 0) continue;
+
+      let questionText = '';
+      let options = [];
+      let correct = [];
+      let type = 'MCQ';
+      let noNegative = false;
+      let answerLine = '';
+      let subject = finalDefaultSubject;
+      let streamId = bulkStream;
+
+      for (let line of lines) {
+        // match "A) text" or "A. text" or "a) text" or "a. text"
+        const optMatch = line.match(/^([A-Za-z])[\)\.\-]\s*(.*)/);
+        const ansMatch = line.match(/^(Answer|Ans|Correct)\s*:\s*(.*)/i);
+        const subjMatch = line.match(/^(Subject)\s*:\s*(.*)/i);
+        const streamMatch = line.match(/^(Stream|Exam)\s*:\s*(.*)/i);
+
+        if (optMatch) {
+          options.push(optMatch[2].trim());
+        } else if (ansMatch) {
+          answerLine = ansMatch[2].trim();
+        } else if (subjMatch) {
+          subject = subjMatch[2].trim();
+        } else if (streamMatch) {
+          const streamStr = streamMatch[2].trim().toLowerCase();
+          const foundStream = streams.find(s => s.id === streamStr || s.name.toLowerCase() === streamStr);
+          if (foundStream) streamId = foundStream.id;
+        } else {
+          // Remove numbering at the start of question e.g. "1.", "Q1."
+          const cleanLine = line.replace(/^(Q?\d+[\.\:\s\-]+)/i, '');
+          if (cleanLine.trim()) {
+            questionText += (questionText ? ' ' : '') + cleanLine.trim();
+          }
+        }
+      }
+
+      if (!questionText) continue;
+
+      // Determine answers
+      if (options.length > 0) {
+        const parts = answerLine.split(/[\s,]+/);
+        for (const p of parts) {
+          const letter = p.trim().toUpperCase();
+          if (letter.length === 1 && letter >= 'A' && letter <= 'Z') {
+            const idx = letter.charCodeAt(0) - 65;
+            if (idx >= 0 && idx < options.length) {
+              correct.push(idx);
+            }
+          }
+        }
+        type = correct.length > 1 ? 'MSQ' : 'MCQ';
+      } else {
+        const val = parseInt(answerLine, 10);
+        if (!isNaN(val)) {
+          correct.push(val);
+        }
+        type = 'Integer';
+        noNegative = true;
+      }
+
+      // Check validation warnings
+      const warnings = [];
+      if (type !== 'Integer' && options.length === 0) warnings.push('No options detected.');
+      if (correct.length === 0) warnings.push('Could not parse correct answer.');
+      if (type !== 'Integer' && correct.some(c => c >= options.length)) warnings.push('Correct index out of bounds.');
+
+      results.push({
+        streamId,
+        subject,
+        type,
+        text: questionText,
+        options: options.length > 0 ? options : undefined,
+        correct,
+        noNegative,
+        warnings,
+        isValid: warnings.length === 0
+      });
+    }
+
+    setParsedQuestions(results);
+  };
+
+  const handleBulkSubmit = async () => {
+    const validQuestions = parsedQuestions.filter(q => q.isValid);
+    if (validQuestions.length === 0) {
+      alert('No valid questions to import. Please check warnings.');
+      return;
+    }
+
+    // Clean objects for server
+    const cleanPayload = validQuestions.map(q => ({
+      streamId: q.streamId,
+      subject: q.subject,
+      type: q.type,
+      text: q.text,
+      options: q.options,
+      correct: q.correct,
+      noNegative: q.noNegative
+    }));
+
+    try {
+      const res = await fetch(`${apiUrl}/admin/questions/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questions: cleanPayload })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Successfully imported ${data.count} questions!`);
+        setEditingQuestion(null);
+        fetchData();
+      } else {
+        alert('Bulk import failed: ' + data.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error connecting to server.');
+    }
+  };
+
+  const removeParsedQuestion = (index) => {
+    setParsedQuestions(parsedQuestions.filter((_, i) => i !== index));
+  };
+
+  // Submit Single Question Add/Edit
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     
@@ -276,128 +435,347 @@ export default function Admin({ user, onBack }) {
 
       {/* Main Panel */}
       {editingQuestion ? (
-        /* Add/Edit Question Form */
         <div className="card">
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>
-            {editingQuestion === 'add' ? 'Create New Question' : 'Edit Question Details'}
-          </h3>
-          <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
+              {editingQuestion === 'add' ? 'Create New Question' : 'Edit Question Details'}
+            </h3>
             
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Exam Stream</label>
-                <select value={formStream} onChange={(e) => handleStreamChange(e.target.value)} style={{ width: '100%' }}>
-                  {streams.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Question Type</label>
-                <select value={formType} onChange={(e) => handleTypeChange(e.target.value)} style={{ width: '100%' }}>
-                  <option value="MCQ">MCQ (Single Correct)</option>
-                  <option value="MSQ">MSQ (Multi Correct)</option>
-                  <option value="Integer">Integer Type</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Section / Subject</label>
-                <select 
-                  value={customSubjectActive ? 'custom' : formSubject} 
-                  onChange={(e) => handleSubjectDropdownChange(e.target.value)} 
-                  style={{ width: '100%', marginBottom: customSubjectActive ? '0.5rem' : '0' }}
+            {editingQuestion === 'add' && (
+              <div style={{ display: 'flex', background: 'var(--bg)', padding: '0.25rem', borderRadius: '0.375rem', border: '1px solid var(--border)' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setImportMode('single')}
+                  style={{ 
+                    padding: '0.35rem 0.75rem', 
+                    fontSize: '0.875rem', 
+                    borderRadius: '0.25rem', 
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: importMode === 'single' ? 'var(--primary)' : 'transparent',
+                    color: importMode === 'single' ? '#fff' : 'var(--text-muted)',
+                    fontWeight: 500
+                  }}
                 >
-                  {(recommendedSubjects[formStream] || []).map(sub => (
-                    <option key={sub} value={sub}>{sub}</option>
-                  ))}
-                  <option value="custom">Other (Create Custom Section)</option>
-                </select>
-                {customSubjectActive && (
+                  Single Form
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setImportMode('bulk')}
+                  style={{ 
+                    padding: '0.35rem 0.75rem', 
+                    fontSize: '0.875rem', 
+                    borderRadius: '0.25rem', 
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: importMode === 'bulk' ? 'var(--primary)' : 'transparent',
+                    color: importMode === 'bulk' ? '#fff' : 'var(--text-muted)',
+                    fontWeight: 500
+                  }}
+                >
+                  Bulk Paste
+                </button>
+              </div>
+            )}
+          </div>
+
+          {importMode === 'single' ? (
+            /* Single Question Form Mode */
+            <form onSubmit={handleFormSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Exam Stream</label>
+                  <select value={formStream} onChange={(e) => handleStreamChange(e.target.value)} style={{ width: '100%' }}>
+                    {streams.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Question Type</label>
+                  <select value={formType} onChange={(e) => handleTypeChange(e.target.value)} style={{ width: '100%' }}>
+                    <option value="MCQ">MCQ (Single Correct)</option>
+                    <option value="MSQ">MSQ (Multi Correct)</option>
+                    <option value="Integer">Integer Type</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Section / Subject</label>
+                  <select 
+                    value={customSubjectActive ? 'custom' : formSubject} 
+                    onChange={(e) => handleSubjectDropdownChange(e.target.value)} 
+                    style={{ width: '100%', marginBottom: customSubjectActive ? '0.5rem' : '0' }}
+                  >
+                    {(recommendedSubjects[formStream] || []).map(sub => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                    <option value="custom">Other (Create Custom Section)</option>
+                  </select>
+                  {customSubjectActive && (
+                    <input 
+                      type="text" 
+                      required 
+                      value={formCustomSubject} 
+                      onChange={(e) => setFormCustomSubject(e.target.value)} 
+                      placeholder="Enter custom section/subject name" 
+                      style={{ width: '100%' }} 
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Question Text</label>
+                <textarea rows={4} required value={formText} onChange={(e) => setFormText(e.target.value)} placeholder="Enter full question content..." style={{ width: '100%' }}></textarea>
+              </div>
+
+              {/* Answer Options for MCQ/MSQ */}
+              {formType !== 'Integer' && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <label style={{ fontWeight: '500' }}>Answer Options</label>
+                    <button type="button" className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }} onClick={addOptionField}>
+                      + Add Option
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {formOptions.map((opt, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem', width: '20px' }}>{i}.</span>
+                        <input 
+                          type="text" 
+                          required 
+                          value={opt} 
+                          onChange={(e) => handleOptionChange(i, e.target.value)} 
+                          placeholder={`Option ${i + 1}`} 
+                          style={{ flex: 1 }} 
+                        />
+                        {formOptions.length > 2 && (
+                          <button type="button" onClick={() => removeOptionField(i)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}>
+                            <X size={18} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.25rem' }}>
+                    Correct Answer(s)
+                  </label>
+                  <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>
+                    {formType === 'Integer' 
+                      ? 'Enter numerical answer (e.g. 42).' 
+                      : 'Enter index of correct options, separated by comma. Starts at 0 (e.g. "1" for Option B, "0, 2" for Option A and C).'}
+                  </span>
                   <input 
                     type="text" 
                     required 
-                    value={formCustomSubject} 
-                    onChange={(e) => setFormCustomSubject(e.target.value)} 
-                    placeholder="Enter custom section/subject name" 
+                    placeholder={formType === 'Integer' ? '42' : '0'} 
+                    value={formCorrect} 
+                    onChange={(e) => setFormCorrect(e.target.value)} 
                     style={{ width: '100%' }} 
                   />
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Question Text</label>
-              <textarea rows={4} required value={formText} onChange={(e) => setFormText(e.target.value)} placeholder="Enter full question content..." style={{ width: '100%' }}></textarea>
-            </div>
-
-            {/* Answer Options for MCQ/MSQ */}
-            {formType !== 'Integer' && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <label style={{ fontWeight: '500' }}>Answer Options</label>
-                  <button type="button" className="btn btn-outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }} onClick={addOptionField}>
-                    + Add Option
-                  </button>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {formOptions.map((opt, i) => (
-                    <div key={i} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem', width: '20px' }}>{i}.</span>
-                      <input 
-                        type="text" 
-                        required 
-                        value={opt} 
-                        onChange={(e) => handleOptionChange(i, e.target.value)} 
-                        placeholder={`Option ${i + 1}`} 
-                        style={{ flex: 1 }} 
-                      />
-                      {formOptions.length > 2 && (
-                        <button type="button" onClick={() => removeOptionField(i)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}>
-                          <X size={18} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', userSelect: 'none' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={formNoNegative} 
+                      onChange={(e) => setFormNoNegative(e.target.checked)} 
+                      style={{ width: 'auto', margin: 0 }}
+                    />
+                    <span style={{ fontWeight: '500' }}>Enable "No Negative Marking" for this question</span>
+                  </label>
                 </div>
               </div>
-            )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                <button type="submit" className="btn btn-primary">Save Question</button>
+                <button type="button" className="btn btn-outline" onClick={() => setEditingQuestion(null)}>Cancel</button>
+              </div>
+            </form>
+          ) : (
+            /* Bulk Importer Mode */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              
+              {/* Instructions Accordion */}
+              <div style={{ background: 'var(--bg)', border: '1px dashed var(--border)', borderRadius: '0.375rem', padding: '1rem' }}>
+                <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', fontSize: '0.95rem', marginBottom: '0.5rem', color: 'var(--primary)' }}>
+                  <HelpCircle size={18} /> Paste Format Template Instructions
+                </h4>
+                <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                  Paste questions separating each question block with a <strong>blank line</strong>. Format questions, options (letters like A., B. or a), b)) and the answer explicitly. 
+                  You can specify overrides for <strong>Subject</strong> and <strong>Stream</strong> directly inside any block!
+                </p>
+                <pre style={{ fontSize: '0.75rem', background: 'var(--border)', padding: '0.5rem', borderRadius: '0.25rem', overflowX: 'auto', lineHeight: '1.4' }}>
+{`1. What is the SI unit of electric current?
+A) Volt
+B) Ampere
+C) Ohm
+D) Tesla
+Answer: B
+
+Subject: Chemistry
+2. Identify the oxidation state of Cr in K2Cr2O7.
+Answer: 6
+
+Stream: bitsat
+3. Which of these are prime? (Multi-correct)
+a. 11
+b. 12
+c. 13
+d. 14
+Answer: a, c`}
+                </pre>
+              </div>
+
+              {/* Set defaults */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', background: 'var(--bg)', padding: '1rem', borderRadius: '0.375rem', border: '1px solid var(--border)' }}>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', fontSize: '0.875rem', marginBottom: '0.5rem' }}>Default Stream</label>
+                  <select value={bulkStream} onChange={(e) => { setBulkStream(e.target.value); const recs = recommendedSubjects[e.target.value] || []; setBulkSubject(recs[0] || 'custom'); }} style={{ width: '100%', padding: '0.375rem' }}>
+                    {streams.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontWeight: '500', fontSize: '0.875rem', marginBottom: '0.5rem' }}>Default Section / Subject</label>
+                  <select 
+                    value={bulkCustomSubjectActive ? 'custom' : bulkSubject} 
+                    onChange={(e) => { if (e.target.value === 'custom') { setBulkCustomSubjectActive(true); } else { setBulkCustomSubjectActive(false); setBulkSubject(e.target.value); } }} 
+                    style={{ width: '100%', padding: '0.375rem', marginBottom: bulkCustomSubjectActive ? '0.5rem' : '0' }}
+                  >
+                    {(recommendedSubjects[bulkStream] || []).map(sub => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                    <option value="custom">Other (Create Custom Section)</option>
+                  </select>
+                  {bulkCustomSubjectActive && (
+                    <input 
+                      type="text" 
+                      required 
+                      value={bulkCustomSubject} 
+                      onChange={(e) => setBulkCustomSubject(e.target.value)} 
+                      placeholder="Enter custom section/subject name" 
+                      style={{ width: '100%', padding: '0.375rem' }} 
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Paste Area */}
               <div>
-                <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.25rem' }}>
-                  Correct Answer(s)
-                </label>
-                <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>
-                  {formType === 'Integer' 
-                    ? 'Enter numerical answer (e.g. 42).' 
-                    : 'Enter index of correct options, separated by comma. Starts at 0 (e.g. "1" for Option B, "0, 2" for Option A and C).'}
-                </span>
-                <input 
-                  type="text" 
-                  required 
-                  placeholder={formType === 'Integer' ? '42' : '0'} 
-                  value={formCorrect} 
-                  onChange={(e) => setFormCorrect(e.target.value)} 
-                  style={{ width: '100%' }} 
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Paste Text Content</label>
+                <textarea 
+                  rows={10} 
+                  required
+                  value={bulkText} 
+                  onChange={(e) => setBulkText(e.target.value)} 
+                  placeholder="Paste your paragraph or list of questions here..." 
+                  style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.875rem', lineHeight: '1.5', padding: '0.75rem' }}
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', userSelect: 'none' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={formNoNegative} 
-                    onChange={(e) => setFormNoNegative(e.target.checked)} 
-                    style={{ width: 'auto', margin: 0 }}
-                  />
-                  <span style={{ fontWeight: '500' }}>Enable "No Negative Marking" for this question</span>
-                </label>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button type="button" className="btn btn-primary" onClick={handleParseBulk}>
+                  <FileText size={18} /> Parse & Preview Questions
+                </button>
+                <button type="button" className="btn btn-outline" onClick={() => setEditingQuestion(null)}>Cancel</button>
               </div>
-            </div>
 
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              <button type="submit" className="btn btn-primary">Save Question</button>
-              <button type="button" className="btn btn-outline" onClick={() => setEditingQuestion(null)}>Cancel</button>
+              {/* Preview List */}
+              {parsedQuestions.length > 0 && (
+                <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+                    <h4 style={{ fontWeight: 'bold', fontSize: '1.125rem' }}>
+                      Parsed Preview ({parsedQuestions.length} Questions Found)
+                    </h4>
+                    
+                    <button 
+                      type="button" 
+                      className="btn btn-primary" 
+                      onClick={handleBulkSubmit}
+                      disabled={parsedQuestions.filter(q => q.isValid).length === 0}
+                    >
+                      <CheckCircle size={18} /> Import All Valid ({parsedQuestions.filter(q => q.isValid).length}) Questions
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {parsedQuestions.map((q, idx) => (
+                      <div 
+                        key={idx} 
+                        className="card" 
+                        style={{ 
+                          borderLeft: `4px solid ${q.isValid ? 'var(--status-answered)' : 'var(--danger)'}`,
+                          background: q.isValid ? 'transparent' : 'rgba(239, 68, 68, 0.02)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <span style={{ padding: '0.2rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(29, 78, 216, 0.1)', color: 'var(--primary)' }}>
+                              {getStreamName(q.streamId)}
+                            </span>
+                            <span style={{ padding: '0.2rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(107, 114, 128, 0.1)', color: 'var(--text-muted)' }}>
+                              {q.subject}
+                            </span>
+                            <span style={{ padding: '0.2rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(168, 85, 247, 0.1)', color: 'var(--status-marked)' }}>
+                              {q.type}
+                            </span>
+                            {q.noNegative && (
+                              <span style={{ padding: '0.2rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(245, 158, 11, 0.1)', color: '#d97706' }}>
+                                No Negative Marking
+                              </span>
+                            )}
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => removeParsedQuestion(idx)} 
+                            style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold' }}
+                          >
+                            <Trash2 size={14} /> Remove
+                          </button>
+                        </div>
+
+                        {q.warnings.length > 0 && (
+                          <div style={{ background: 'rgba(239, 68, 68, 0.08)', color: 'var(--danger)', padding: '0.5rem 0.75rem', borderRadius: '0.25rem', marginBottom: '0.75rem', fontSize: '0.825rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <AlertTriangle size={16} />
+                            <span><strong>Parse Warnings:</strong> {q.warnings.join(' | ')}</span>
+                          </div>
+                        )}
+
+                        <p style={{ fontWeight: '500', marginBottom: '0.75rem' }}>Q{idx + 1}. {q.text}</p>
+
+                        {q.options && q.options.length > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.825rem', color: 'var(--text-muted)' }}>
+                            {q.options.map((opt, oIdx) => {
+                              const isCorrect = q.correct.includes(oIdx);
+                              return (
+                                <div key={oIdx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: isCorrect ? 'var(--status-answered)' : 'inherit' }}>
+                                  {isCorrect ? <Check size={14} /> : <div style={{ width: 14 }}></div>}
+                                  <span>{String.fromCharCode(65 + oIdx)}. {opt}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {q.type === 'Integer' && (
+                          <div style={{ fontSize: '0.825rem', color: 'var(--status-answered)', fontWeight: 'bold' }}>
+                            Parsed Value: {q.correct[0] !== undefined ? q.correct[0] : 'None'}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
-          </form>
+          )}
         </div>
       ) : loading ? (
         <div>Loading records...</div>
