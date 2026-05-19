@@ -22,6 +22,29 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  }
+});
+const upload = multer({ storage });
+
+app.use('/uploads', express.static(uploadDir));
+
 const PORT = process.env.PORT || 5000;
 
 // Connect to MongoDB Atlas
@@ -254,14 +277,27 @@ app.get('/api/community/questions', async (req, res) => {
   }
 });
 
+// 1b. Single file upload endpoint
+app.post('/api/upload', upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+    const relativePath = `/uploads/${req.file.filename}`;
+    res.json({ success: true, url: relativePath });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 2. Post a new community question
 app.post('/api/community/questions', async (req, res) => {
   try {
-    const { title, content, subject, postedBy, authorName } = req.body;
+    const { title, content, subject, postedBy, authorName, attachment } = req.body;
     if (!title || !content || !postedBy || !authorName) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
-    const q = new CommunityQuestion({ title, content, subject, postedBy, authorName, upvotes: [], answers: [] });
+    const q = new CommunityQuestion({ title, content, subject, postedBy, authorName, attachment, upvotes: [], answers: [] });
     await q.save();
     res.json({ success: true, question: q });
   } catch (error) {
@@ -296,7 +332,7 @@ app.post('/api/community/questions/:questionId/upvote', async (req, res) => {
 app.post('/api/community/questions/:questionId/answers', async (req, res) => {
   try {
     const { questionId } = req.params;
-    const { content, postedBy, authorName } = req.body;
+    const { content, postedBy, authorName, attachment } = req.body;
     if (!content || !postedBy || !authorName) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
@@ -304,7 +340,7 @@ app.post('/api/community/questions/:questionId/answers', async (req, res) => {
     const q = await CommunityQuestion.findById(questionId);
     if (!q) return res.status(404).json({ success: false, error: 'Question not found' });
 
-    q.answers.push({ content, postedBy, authorName, upvotes: [], createdAt: new Date() });
+    q.answers.push({ content, postedBy, authorName, attachment, upvotes: [], createdAt: new Date() });
     await q.save();
     res.json({ success: true, question: q });
   } catch (error) {

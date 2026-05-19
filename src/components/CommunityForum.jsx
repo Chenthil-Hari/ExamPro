@@ -17,6 +17,11 @@ export default function CommunityForum({ user }) {
   const [newAnswerContent, setNewAnswerContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // File Upload states
+  const [questionAttachment, setQuestionAttachment] = useState(null);
+  const [answerAttachment, setAnswerAttachment] = useState(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+
   // Filter & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('All');
@@ -46,6 +51,52 @@ export default function CommunityForum({ user }) {
     fetchQuestions();
   }, []);
 
+  // Handle file uploads
+  const handleFileUpload = async (e, type) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File is too large. Maximum size is 5MB.');
+      return;
+    }
+
+    try {
+      setUploadingFile(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Endpoint path relative helper:
+      const baseApiUrl = apiUrl.replace(/\/api$/, '');
+      const res = await fetch(`${baseApiUrl}/api/upload`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (type === 'question') {
+          setQuestionAttachment(data.url);
+        } else {
+          setAnswerAttachment(data.url);
+        }
+      } else {
+        alert('Upload failed: ' + data.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error uploading file');
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  // Convert uploaded path to full URL
+  const getAttachmentUrl = (path) => {
+    if (!path) return '';
+    const baseUrl = apiUrl.replace(/\/api$/, '');
+    return `${baseUrl}${path}`;
+  };
+
   // Post a new question
   const handlePostQuestion = async (e) => {
     e.preventDefault();
@@ -61,7 +112,8 @@ export default function CommunityForum({ user }) {
           content: newContent,
           subject: newSubject,
           postedBy: user.id || user.userId,
-          authorName: user.name
+          authorName: user.name,
+          attachment: questionAttachment
         })
       });
       const data = await res.json();
@@ -69,6 +121,7 @@ export default function CommunityForum({ user }) {
         setNewTitle('');
         setNewContent('');
         setNewSubject('General');
+        setQuestionAttachment(null);
         setView('feed');
         fetchQuestions();
       } else {
@@ -94,14 +147,15 @@ export default function CommunityForum({ user }) {
         body: JSON.stringify({
           content: newAnswerContent,
           postedBy: user.id || user.userId,
-          authorName: user.name
+          authorName: user.name,
+          attachment: answerAttachment
         })
       });
       const data = await res.json();
       if (data.success) {
         setNewAnswerContent('');
+        setAnswerAttachment(null);
         setSelectedQuestion(data.question);
-        // Sync inside main questions list too
         setQuestions(prev => prev.map(q => q._id === data.question._id ? data.question : q));
       } else {
         alert('Failed to submit explanation: ' + data.error);
@@ -115,7 +169,7 @@ export default function CommunityForum({ user }) {
 
   // Upvote Question
   const handleUpvoteQuestion = async (qId, e) => {
-    e?.stopPropagation(); // Prevent detail navigation if clicked on feed list
+    e?.stopPropagation(); 
     if (!user) return alert('Login required to upvote');
 
     try {
@@ -180,7 +234,56 @@ export default function CommunityForum({ user }) {
     }
   };
 
-  // Filters
+  // Helper renderer for attachments
+  const renderAttachment = (path) => {
+    if (!path) return null;
+    const url = getAttachmentUrl(path);
+    const isPdf = path.toLowerCase().endsWith('.pdf');
+
+    if (isPdf) {
+      return (
+        <div style={{ marginTop: '0.75rem' }}>
+          <a 
+            href={url} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="btn btn-outline"
+            style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '0.5rem', 
+              fontSize: '0.8rem', 
+              padding: '0.35rem 0.75rem',
+              color: 'var(--primary)',
+              borderColor: 'var(--primary)',
+              textDecoration: 'none'
+            }}
+          >
+            📎 View Attached PDF
+          </a>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ marginTop: '1rem', overflow: 'hidden', borderRadius: '0.375rem', border: '1px solid var(--border)', maxWidth: '100%', maxHeight: '400px' }}>
+        <img 
+          src={url} 
+          alt="Attachment" 
+          style={{ 
+            width: '100%', 
+            maxHeight: '400px', 
+            objectFit: 'contain',
+            background: 'var(--bg)',
+            display: 'block',
+            cursor: 'zoom-in'
+          }} 
+          onClick={() => window.open(url, '_blank')}
+        />
+      </div>
+    );
+  };
+
   const subjects = ['All', 'General', 'NEET', 'JEE Main', 'JEE Advanced', 'Physics', 'Chemistry', 'Biology', 'Mathematics'];
 
   const filteredQuestions = questions.filter(q => {
@@ -232,20 +335,18 @@ export default function CommunityForum({ user }) {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Subject / Stream Category</label>
-                <select value={newSubject} onChange={(e) => setNewSubject(e.target.value)} style={{ width: '100%' }}>
-                  <option value="General">General Discussion</option>
-                  <option value="Physics">Physics</option>
-                  <option value="Chemistry">Chemistry</option>
-                  <option value="Biology">Biology</option>
-                  <option value="Mathematics">Mathematics</option>
-                  <option value="NEET">NEET Prep</option>
-                  <option value="JEE Main">JEE Main Prep</option>
-                  <option value="JEE Advanced">JEE Advanced Prep</option>
-                </select>
-              </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Subject / Stream Category</label>
+              <select value={newSubject} onChange={(e) => setNewSubject(e.target.value)} style={{ width: '100%' }}>
+                <option value="General">General Discussion</option>
+                <option value="Physics">Physics</option>
+                <option value="Chemistry">Chemistry</option>
+                <option value="Biology">Biology</option>
+                <option value="Mathematics">Mathematics</option>
+                <option value="NEET">NEET Prep</option>
+                <option value="JEE Main">JEE Main Prep</option>
+                <option value="JEE Advanced">JEE Advanced Prep</option>
+              </select>
             </div>
 
             <div>
@@ -260,7 +361,27 @@ export default function CommunityForum({ user }) {
               />
             </div>
 
-            <button type="submit" disabled={submitting} className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>
+            <div>
+              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>
+                Attach Image or PDF (Optional)
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <input 
+                  type="file" 
+                  accept="image/*,application/pdf"
+                  onChange={(e) => handleFileUpload(e, 'question')}
+                  disabled={uploadingFile}
+                />
+                {uploadingFile && <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Uploading file...</span>}
+              </div>
+              {questionAttachment && (
+                <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: 'var(--status-answered)', fontWeight: 'bold' }}>
+                  ✓ File uploaded successfully: {questionAttachment.split('/').pop()}
+                </div>
+              )}
+            </div>
+
+            <button type="submit" disabled={submitting || uploadingFile} className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>
               {submitting ? 'Posting...' : 'Post Question'}
             </button>
           </form>
@@ -300,7 +421,9 @@ export default function CommunityForum({ user }) {
               {selectedQuestion.content}
             </p>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+            {renderAttachment(selectedQuestion.attachment)}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.825rem' }}>
                 <UserCircle size={16} />
                 <span>Posted by <strong>{selectedQuestion.authorName}</strong></span>
@@ -349,7 +472,9 @@ export default function CommunityForum({ user }) {
                     <div key={ans._id} className="card" style={{ borderLeft: '3px solid var(--primary)' }}>
                       <p style={{ whiteSpace: 'pre-wrap', lineHeight: '1.5', marginBottom: '1rem' }}>{ans.content}</p>
                       
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.825rem', color: 'var(--text-muted)', flexWrap: 'wrap', gap: '1rem' }}>
+                      {renderAttachment(ans.attachment)}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.825rem', color: 'var(--text-muted)', borderTop: ans.attachment ? '1px solid var(--border)' : 'none', paddingTop: ans.attachment ? '1rem' : 0, marginTop: ans.attachment ? '1rem' : 0, flexWrap: 'wrap', gap: '1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <UserCircle size={14} />
                           <span>Explained by <strong>{ans.authorName}</strong></span>
@@ -385,16 +510,39 @@ export default function CommunityForum({ user }) {
           {/* Add Explanation Form */}
           <div className="card">
             <h4 style={{ fontSize: '1rem', fontWeight: 'bold', marginBottom: '1rem' }}>Provide Your Explanation</h4>
-            <form onSubmit={handlePostAnswer} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <textarea 
-                required 
-                rows={4}
-                placeholder="Write your explanation or step-by-step mathematical proof here..."
-                value={newAnswerContent}
-                onChange={(e) => setNewAnswerContent(e.target.value)}
-                style={{ width: '100%', resize: 'vertical' }}
-              />
-              <button type="submit" disabled={submitting} className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>
+            <form onSubmit={handlePostAnswer} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div>
+                <textarea 
+                  required 
+                  rows={4}
+                  placeholder="Write your explanation or step-by-step mathematical proof here..."
+                  value={newAnswerContent}
+                  onChange={(e) => setNewAnswerContent(e.target.value)}
+                  style={{ width: '100%', resize: 'vertical' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontWeight: '500', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+                  Attach Image or PDF (Optional)
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <input 
+                    type="file" 
+                    accept="image/*,application/pdf"
+                    onChange={(e) => handleFileUpload(e, 'answer')}
+                    disabled={uploadingFile}
+                  />
+                  {uploadingFile && <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Uploading file...</span>}
+                </div>
+                {answerAttachment && (
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: 'var(--status-answered)', fontWeight: 'bold' }}>
+                    ✓ File uploaded successfully: {answerAttachment.split('/').pop()}
+                  </div>
+                )}
+              </div>
+
+              <button type="submit" disabled={submitting || uploadingFile} className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>
                 {submitting ? 'Submitting...' : 'Post Explanation'}
               </button>
             </form>
@@ -472,9 +620,16 @@ export default function CommunityForum({ user }) {
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                      <span className="tag" style={{ background: 'rgba(29, 78, 216, 0.1)', color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 'bold' }}>
-                        {q.subject}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span className="tag" style={{ background: 'rgba(29, 78, 216, 0.1)', color: 'var(--primary)', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                          {q.subject}
+                        </span>
+                        {q.attachment && (
+                          <span style={{ fontSize: '0.75rem', color: 'var(--primary)', background: 'rgba(29, 78, 216, 0.05)', padding: '0.15rem 0.4rem', borderRadius: '0.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                            📎 Attachment
+                          </span>
+                        )}
+                      </div>
                       
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>

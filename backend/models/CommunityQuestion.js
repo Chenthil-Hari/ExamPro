@@ -7,10 +7,12 @@ const communityQuestionSchema = new mongoose.Schema({
   postedBy: { type: String, required: true }, // userId of the student (e.g. STU_hari@gmail.com)
   authorName: { type: String, required: true },
   upvotes: [{ type: String }], // Array of userIds who upvoted the question
+  attachment: { type: String, default: null }, // Relative path to image or PDF (e.g. /uploads/filename)
   answers: [{
     content: { type: String, required: true },
     postedBy: { type: String, required: true },
     authorName: { type: String, required: true },
+    attachment: { type: String, default: null }, // Relative path to answer attachment
     createdAt: { type: Date, default: Date.now },
     upvotes: [{ type: String }]
   }],
