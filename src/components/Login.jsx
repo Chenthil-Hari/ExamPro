@@ -19,7 +19,11 @@ export default function Login({ onLogin }) {
       });
       const data = await res.json();
       if (data.success) {
-        onLogin(data.user);
+        const normalized = {
+          ...data.user,
+          id: data.user.userId
+        };
+        onLogin(normalized);
       } else {
         alert('Login failed: ' + data.error);
       }
@@ -32,7 +36,7 @@ export default function Login({ onLogin }) {
     const randomId = Math.floor(Math.random() * 10000);
     const guestName = prompt('Enter your name for Guest session', `Guest_${randomId}`);
     if (guestName) {
-      const guestUser = { id: `GST_${randomId}`, name: guestName, isGuest: true, isAdmin: false };
+      const guestUser = { id: `GST_${randomId}`, userId: `GST_${randomId}`, name: guestName, isGuest: true, isAdmin: false };
       onLogin(guestUser);
     }
   };

@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, Clock, Maximize, Flag, Star, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { AlertCircle, Clock, Maximize, Flag, Star, Loader2, HelpCircle } from 'lucide-react';
 
 export default function Exam({ stream, user, onComplete }) {
   const [questions, setQuestions] = useState([]);
@@ -13,6 +13,10 @@ export default function Exam({ stream, user, onComplete }) {
   const [warnings, setWarnings] = useState(0);
   const [error, setError] = useState(null);
   const [bookmarkedIds, setBookmarkedIds] = useState([]);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [activeWarning, setActiveWarning] = useState(null);
+
+  const handleSubmitRef = useRef(null);
 
   // Load bookmarks
   useEffect(() => {
@@ -130,7 +134,7 @@ export default function Exam({ stream, user, onComplete }) {
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleSubmit();
+          if (handleSubmitRef.current) handleSubmitRef.current();
           return 0;
         }
         return prev - 1;
@@ -151,10 +155,13 @@ export default function Exam({ stream, user, onComplete }) {
       if (document.hidden) {
         setWarnings(w => {
           const newW = w + 1;
-          alert(`Warning ${newW}/3: Tab switching is prohibited!`);
-          if (newW >= 3) {
-            handleSubmit();
-          }
+          setTimeout(() => {
+            if (newW >= 3) {
+              if (handleSubmitRef.current) handleSubmitRef.current();
+            } else {
+              setActiveWarning(newW);
+            }
+          }, 0);
           return newW;
         });
       }
@@ -287,6 +294,8 @@ export default function Exam({ stream, user, onComplete }) {
     });
   }, [answers, timeSpent, status, questions, stream.id, onComplete]);
 
+  handleSubmitRef.current = handleSubmit;
+
   // Loading state
   if (questions.length === 0) {
     return (
@@ -418,11 +427,65 @@ export default function Exam({ stream, user, onComplete }) {
         <button 
           className="btn btn-primary" 
           style={{ width: '100%', marginTop: '2rem', backgroundColor: 'var(--danger)' }}
-          onClick={() => window.confirm('Are you sure you want to submit?') && handleSubmit()}
+          onClick={() => setShowSubmitModal(true)}
         >
           Submit Exam
         </button>
       </div>
+
+      {/* Tab Switch Warning Modal */}
+      {activeWarning !== null && (
+        <div className="fullscreen-overlay" style={{ zIndex: 10000 }}>
+          <div className="card" style={{ maxWidth: 450, textAlign: 'center', borderColor: 'var(--danger)' }}>
+            <AlertCircle size={48} color="var(--danger)" style={{ margin: '0 auto 1rem' }} />
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--danger)', marginBottom: '1rem' }}>
+              Warning {activeWarning} / 3: Tab Switching Detected!
+            </h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+              Switching tabs, applications, or exiting the exam layout is strictly prohibited. 
+              Exiting the screen <strong>{3 - activeWarning} more time(s)</strong> will result in the immediate automatic submission of your exam!
+            </p>
+            <button className="btn btn-primary" onClick={() => setActiveWarning(null)} style={{ width: '100%', backgroundColor: 'var(--danger)' }}>
+              I Understand, Resume Exam
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Submit Exam Confirmation Modal */}
+      {showSubmitModal && (
+        <div className="fullscreen-overlay" style={{ zIndex: 10000 }}>
+          <div className="card" style={{ maxWidth: 450, textAlign: 'center' }}>
+            <HelpCircle size={48} color="var(--primary)" style={{ margin: '0 auto 1rem' }} />
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>
+              Submit Exam?
+            </h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+              You have answered <strong>{Object.keys(answers).length}</strong> out of <strong>{questions.length}</strong> questions. 
+              Are you sure you want to finish and view your performance analytics? You cannot change your answers after submission.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button 
+                className="btn btn-primary" 
+                onClick={() => {
+                  setShowSubmitModal(false);
+                  handleSubmit();
+                }} 
+                style={{ flex: 1, backgroundColor: 'var(--danger)' }}
+              >
+                Yes, Submit Exam
+              </button>
+              <button 
+                className="btn btn-outline" 
+                onClick={() => setShowSubmitModal(false)} 
+                style={{ flex: 1 }}
+              >
+                No, Keep Solving
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
