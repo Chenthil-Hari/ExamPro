@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Award, BookOpen, Clock, ChevronLeft, Calendar, Trash2, CheckCircle, HelpCircle } from 'lucide-react';
+import { Award, BookOpen, Clock, ChevronLeft, Calendar, Trash2, CheckCircle, HelpCircle, Check } from 'lucide-react';
 import { streams } from '../questions';
 
 export default function Profile({ user, onBack }) {
@@ -7,6 +7,10 @@ export default function Profile({ user, onBack }) {
   const [bookmarks, setBookmarks] = useState([]);
   const [activeTab, setActiveTab] = useState('history'); // 'history' or 'vault'
   const [loading, setLoading] = useState(true);
+  
+  // Interactive Re-solving State
+  const [userAnswers, setUserAnswers] = useState({}); // questionId -> array of selected index or integer
+  const [checkedStatus, setCheckedStatus] = useState({}); // questionId -> boolean
   const [revealedSolutions, setRevealedSolutions] = useState({}); // questionId -> boolean
 
   useEffect(() => {
@@ -78,6 +82,35 @@ export default function Profile({ user, onBack }) {
     }
   };
 
+  const handleOptionSelect = (qId, optionIdx, isMsq) => {
+    if (checkedStatus[qId]) return;
+    setUserAnswers(prev => {
+      const current = prev[qId] || [];
+      if (isMsq) {
+        const updated = current.includes(optionIdx)
+          ? current.filter(i => i !== optionIdx)
+          : [...current, optionIdx];
+        return { ...prev, [qId]: updated };
+      } else {
+        return { ...prev, [qId]: [optionIdx] };
+      }
+    });
+  };
+
+  const handleIntegerChange = (qId, val) => {
+    if (checkedStatus[qId]) return;
+    setUserAnswers(prev => ({ ...prev, [qId]: [val] }));
+  };
+
+  const handleCheckAnswer = (qId) => {
+    setCheckedStatus(prev => ({ ...prev, [qId]: true }));
+  };
+
+  const handleResetAnswer = (qId) => {
+    setCheckedStatus(prev => ({ ...prev, [qId]: false }));
+    setUserAnswers(prev => ({ ...prev, [qId]: [] }));
+  };
+
   const toggleSolution = (qId) => {
     setRevealedSolutions(prev => ({ ...prev, [qId]: !prev[qId] }));
   };
@@ -98,14 +131,14 @@ export default function Profile({ user, onBack }) {
           <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>User ID: {user.id}</span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ padding: '0.75rem', background: 'rgba(29, 78, 216, 0.1)', color: 'var(--primary)', borderRadius: '0.5rem' }}>
+            <div style={{ padding: '0.75rem', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--primary)', borderRadius: '0.5rem' }}>
               <BookOpen size={24} />
             </div>
             <div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Exams Attempted</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{totalExams}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{totalExams} times</div>
             </div>
           </div>
 
@@ -114,7 +147,7 @@ export default function Profile({ user, onBack }) {
               <Award size={24} />
             </div>
             <div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Avg. Accuracy</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Average Accuracy</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{avgScore}%</div>
             </div>
           </div>
@@ -201,61 +234,183 @@ export default function Profile({ user, onBack }) {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            {bookmarks.map((q) => (
-              <div key={q._id} className="card" style={{ position: 'relative' }}>
-                <button 
-                  onClick={() => removeBookmark(q._id)}
-                  style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}
-                  title="Remove from vault"
-                >
-                  <Trash2 size={18} />
-                </button>
+            {bookmarks.map((q) => {
+              const answers = userAnswers[q._id] || [];
+              const isChecked = checkedStatus[q._id];
 
-                <span style={{ display: 'inline-block', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(29, 78, 216, 0.1)', color: 'var(--primary)', marginBottom: '1rem' }}>
-                  {getStreamName(q.streamId)} | {q.subject}
-                </span>
-
-                <p style={{ fontSize: '1.125rem', fontWeight: '500', marginBottom: '1rem', paddingRight: '2rem' }}>{q.text}</p>
-
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                  <button className="btn btn-outline" onClick={() => toggleSolution(q._id)}>
-                    {revealedSolutions[q._id] ? 'Hide Solution' : 'Reveal Solution'}
+              return (
+                <div key={q._id} className="card" style={{ position: 'relative' }}>
+                  <button 
+                    onClick={() => removeBookmark(q._id)}
+                    style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}
+                    title="Remove from vault"
+                  >
+                    <Trash2 size={18} />
                   </button>
-                </div>
 
-                {revealedSolutions[q._id] && (
-                  <div style={{ marginTop: '1.5rem', padding: '1rem', borderTop: '1px solid var(--border)', background: 'rgba(29, 78, 216, 0.02)', borderRadius: '0.5rem' }}>
-                    <h5 style={{ fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '0.875rem' }}>Correct Answer(s):</h5>
-                    {q.type === 'Integer' ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--status-answered)', fontWeight: 'bold' }}>
-                        <CheckCircle size={18} /> Numerical Value: {q.correct[0]}
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        {q.options.map((opt, i) => {
-                          const isCorrect = q.correct.includes(i);
-                          return (
-                            <div 
-                              key={i} 
-                              style={{ 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                gap: '0.5rem', 
-                                color: isCorrect ? 'var(--status-answered)' : 'var(--text-muted)',
-                                fontWeight: isCorrect ? 'bold' : 'normal'
-                              }}
-                            >
-                              {isCorrect ? <CheckCircle size={16} /> : <HelpCircle size={16} />}
-                              {opt} {isCorrect && '(Correct)'}
+                  <span style={{ display: 'inline-block', padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(29, 78, 216, 0.1)', color: 'var(--primary)', marginBottom: '1rem' }}>
+                    {getStreamName(q.streamId)} | {q.subject}
+                  </span>
+
+                  <p style={{ fontSize: '1.125rem', fontWeight: '500', marginBottom: '1.5rem', paddingRight: '2rem' }}>{q.text}</p>
+
+                  {/* Re-solve options */}
+                  {q.type !== 'Integer' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                      {q.options.map((opt, i) => {
+                        const isSelected = answers.includes(i);
+                        const isCorrect = q.correct.includes(i);
+                        
+                        let optionStyle = {
+                          padding: '0.75rem',
+                          borderRadius: '0.375rem',
+                          border: '1px solid var(--border)',
+                          cursor: isChecked ? 'default' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.75rem',
+                          background: 'var(--bg)',
+                          transition: 'all 0.2s'
+                        };
+
+                        if (isSelected && !isChecked) {
+                          optionStyle.borderColor = 'var(--primary)';
+                          optionStyle.background = 'rgba(29, 78, 216, 0.02)';
+                        } else if (isChecked) {
+                          if (isCorrect) {
+                            optionStyle.borderColor = 'var(--status-answered)';
+                            optionStyle.background = 'rgba(34, 197, 94, 0.04)';
+                          } else if (isSelected && !isCorrect) {
+                            optionStyle.borderColor = 'var(--status-not-answered)';
+                            optionStyle.background = 'rgba(239, 68, 68, 0.04)';
+                          }
+                        }
+
+                        return (
+                          <div 
+                            key={i} 
+                            style={optionStyle} 
+                            onClick={() => handleOptionSelect(q._id, i, q.type === 'MSQ')}
+                          >
+                            <div style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: q.type === 'MSQ' ? '0.25rem' : '50%',
+                              border: `2px solid ${isSelected ? 'var(--primary)' : 'var(--text-muted)'}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              background: isSelected ? 'var(--primary)' : 'transparent',
+                            }}>
+                              {isSelected && <Check size={12} color="#fff" />}
                             </div>
-                          );
-                        })}
-                      </div>
+                            <span style={{ fontSize: '0.95rem' }}>{opt}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: '1.25rem' }}>
+                      <input 
+                        type="number" 
+                        disabled={isChecked}
+                        value={answers[0] || ''} 
+                        onChange={(e) => handleIntegerChange(q._id, e.target.value)} 
+                        placeholder="Type numerical answer" 
+                        style={{
+                          width: '100%',
+                          maxWidth: '250px',
+                          padding: '0.5rem',
+                          fontSize: '0.95rem',
+                          border: '1px solid var(--border)',
+                          borderColor: isChecked 
+                            ? (parseInt(answers[0], 10) === q.correct[0] ? 'var(--status-answered)' : 'var(--status-not-answered)') 
+                            : 'var(--border)'
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Actions buttons */}
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    {!isChecked ? (
+                      <button 
+                        className="btn btn-primary" 
+                        disabled={answers.length === 0 || answers[0] === ''}
+                        onClick={() => handleCheckAnswer(q._id)}
+                      >
+                        Check Answer
+                      </button>
+                    ) : (
+                      <button className="btn btn-outline" onClick={() => handleResetAnswer(q._id)}>
+                        Reset & Try Again
+                      </button>
                     )}
+                    
+                    <button className="btn btn-outline" onClick={() => toggleSolution(q._id)}>
+                      {revealedSolutions[q._id] ? 'Hide Answer Details' : 'Reveal Correct Answer'}
+                    </button>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {/* Checked Evaluator Status Banner */}
+                  {isChecked && (() => {
+                    let isCorrect = false;
+                    if (q.type === 'Integer') {
+                      isCorrect = parseInt(answers[0], 10) === q.correct[0];
+                    } else {
+                      isCorrect = answers.length === q.correct.length && q.correct.every(c => answers.includes(c));
+                    }
+
+                    return (
+                      <div style={{
+                        marginTop: '1.25rem',
+                        padding: '0.75rem 1rem',
+                        borderRadius: '0.375rem',
+                        background: isCorrect ? 'rgba(34, 197, 94, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                        color: isCorrect ? 'var(--status-answered)' : 'var(--status-not-answered)',
+                        fontWeight: 'bold',
+                        fontSize: '0.875rem'
+                      }}>
+                        {isCorrect ? '🎉 Correct! Well done.' : '❌ Incorrect. Double-check your options and try again!'}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Revealed Solution Box */}
+                  {revealedSolutions[q._id] && (
+                    <div style={{ marginTop: '1.5rem', padding: '1rem', borderTop: '1px solid var(--border)', background: 'rgba(29, 78, 216, 0.02)', borderRadius: '0.5rem' }}>
+                      <h5 style={{ fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '0.875rem' }}>Correct Answer Details:</h5>
+                      {q.type === 'Integer' ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--status-answered)', fontWeight: 'bold' }}>
+                          <CheckCircle size={18} /> Numerical Value: {q.correct[0]}
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {q.options.map((opt, i) => {
+                            const isCorrect = q.correct.includes(i);
+                            return (
+                              <div 
+                                key={i} 
+                                style={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  gap: '0.5rem', 
+                                  color: isCorrect ? 'var(--status-answered)' : 'var(--text-muted)',
+                                  fontWeight: isCorrect ? 'bold' : 'normal'
+                                }}
+                              >
+                                {isCorrect ? <CheckCircle size={16} /> : <HelpCircle size={16} />}
+                                <span>{String.fromCharCode(65 + i)}. {opt} {isCorrect && '(Correct Option)'}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )
       )}
