@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Plus, Edit2, Trash2, Check, X, ShieldAlert, FileText, CheckCircle, AlertTriangle, HelpCircle } from 'lucide-react';
+import { ChevronLeft, Plus, Edit2, Trash2, Check, X, ShieldAlert, FileText, CheckCircle, AlertTriangle, HelpCircle, Upload, Loader2 } from 'lucide-react';
 import { streams } from '../questions';
 
 const recommendedSubjects = {
@@ -9,6 +9,32 @@ const recommendedSubjects = {
   bitsat: ['Physics', 'Chemistry', 'Math', 'English', 'Logical Reasoning'],
   iaat: ['Aptitude', 'Math', 'Logic'],
   cuet: ['General Test', 'English', 'History', 'Science', 'Math']
+};
+
+// Lazy loaders for heavy parsing scripts from CDNs
+const loadPdfJs = () => {
+  return new Promise((resolve, reject) => {
+    if (window.pdfjsLib) return resolve(window.pdfjsLib);
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
+    script.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+      resolve(window.pdfjsLib);
+    };
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+};
+
+const loadTesseract = () => {
+  return new Promise((resolve, reject) => {
+    if (window.Tesseract) return resolve(window.Tesseract);
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/tesseract.js@v5.0.3/dist/tesseract.min.js';
+    script.onload = () => resolve(window.Tesseract);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
 };
 
 export default function Admin({ user, onBack }) {
@@ -41,6 +67,10 @@ export default function Admin({ user, onBack }) {
   const [bulkSubject, setBulkSubject] = useState('Physics');
   const [bulkCustomSubjectActive, setBulkCustomSubjectActive] = useState(false);
   const [bulkCustomSubject, setBulkCustomSubject] = useState('');
+
+  // OCR/File Loading State
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState('');
 
   const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
 
@@ -98,6 +128,7 @@ export default function Admin({ user, onBack }) {
     setBulkSubject('Physics');
     setBulkCustomSubjectActive(false);
     setBulkCustomSubject('');
+    setOcrProgress('');
   };
 
   // Open Edit Question Form
@@ -179,7 +210,6 @@ export default function Admin({ user, onBack }) {
       let streamId = bulkStream;
 
       for (let line of lines) {
-        // match "A) text" or "A. text" or "a) text" or "a. text"
         const optMatch = line.match(/^([A-Za-z])[\)\.\-]\s*(.*)/);
         const ansMatch = line.match(/^(Answer|Ans|Correct)\s*:\s*(.*)/i);
         const subjMatch = line.match(/^(Subject)\s*:\s*(.*)/i);
@@ -248,6 +278,85 @@ export default function Admin({ user, onBack }) {
     }
 
     setParsedQuestions(results);
+  };
+
+  // Handle file uploading (PDF directly or scans with OCR)
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setOcrLoading(true);
+    setOcrProgress('Loading AI & parsing libraries...');
+
+    try {
+      let extractedText = '';
+
+      if (file.type === 'application/pdf') {
+        setOcrProgress('Analyzing PDF text layers...');
+        const pdfjs = await loadPdfJs();
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+        
+        let directText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map(item => item.str).join(' ');
+          directText += pageText + '\n\n';
+        }
+
+        if (directText.trim().length > 100) {
+          extractedText = directText;
+          setOcrProgress('Extracted text directly from PDF layer!');
+        } else {
+          // Scanned PDF - rendering pages onto canvas and run OCR
+          setOcrProgress('Scanned PDF detected. Initiating page-by-page OCR scan...');
+          const Tesseract = await loadTesseract();
+          const scanLimit = Math.min(pdf.numPages, 5); // protect browser memory
+
+          for (let i = 1; i <= scanLimit; i++) {
+            setOcrProgress(`Scanning Page ${i} of ${scanLimit} with OCR...`);
+            const page = await pdf.getPage(i);
+            
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const viewport = page.getViewport({ scale: 1.5 });
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            
+            await page.render({ canvasContext: context, viewport }).promise;
+            const dataUrl = canvas.toDataURL('image/png');
+            
+            const ocrResult = await Tesseract.recognize(dataUrl, 'eng');
+            extractedText += ocrResult.data.text + '\n\n';
+          }
+        }
+      } else if (file.type.startsWith('image/')) {
+        setOcrProgress('Initializing OCR engine...');
+        const Tesseract = await loadTesseract();
+        
+        const ocrResult = await Tesseract.recognize(file, 'eng', {
+          logger: m => {
+            if (m.status === 'recognizing') {
+              setOcrProgress(`Analyzing image pixels: ${Math.round(m.progress * 100)}%`);
+            }
+          }
+        });
+        extractedText = ocrResult.data.text;
+      } else {
+        alert('Unsupported file format. Please upload a PDF file or an Image (PNG/JPEG).');
+        setOcrLoading(false);
+        return;
+      }
+
+      setBulkText(prev => prev + (prev ? '\n\n' : '') + extractedText);
+      setOcrProgress('Success! Text appended to raw input box.');
+    } catch (err) {
+      console.error(err);
+      alert('Error during document scanning: ' + err.message);
+    } finally {
+      setOcrLoading(false);
+    }
   };
 
   const handleBulkSubmit = async () => {
@@ -602,13 +711,66 @@ export default function Admin({ user, onBack }) {
             /* Bulk Importer Mode */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               
+              {/* File Upload Section */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontWeight: '500' }}>AI Scan (Upload PDF or Image Exam Sheet)</label>
+                <div style={{
+                  border: '2px dashed var(--border)',
+                  borderRadius: '0.5rem',
+                  padding: '1.5rem',
+                  textAlign: 'center',
+                  background: 'var(--bg)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  position: 'relative'
+                }}>
+                  {ocrLoading ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                      <Loader2 className="animate-spin" size={32} color="var(--primary)" />
+                      <p style={{ fontWeight: '500', fontSize: '0.9rem' }}>{ocrProgress}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload size={32} color="var(--primary)" />
+                      <div>
+                        <p style={{ fontWeight: '500', fontSize: '0.95rem' }}>Drag & Drop or Click to Select File</p>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                          Supports text PDFs, scanned PDFs (first 5 pages), and JPEG/PNG screenshots.
+                        </p>
+                      </div>
+                      <input 
+                        type="file" 
+                        accept="application/pdf,image/*" 
+                        onChange={handleFileUpload} 
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          opacity: 0,
+                          cursor: 'pointer'
+                        }}
+                      />
+                    </>
+                  )}
+                </div>
+                {ocrProgress && !ocrLoading && (
+                  <p style={{ fontSize: '0.825rem', color: 'var(--status-answered)', fontWeight: 'bold' }}>
+                    {ocrProgress}
+                  </p>
+                )}
+              </div>
+
               {/* Instructions Accordion */}
               <div style={{ background: 'var(--bg)', border: '1px dashed var(--border)', borderRadius: '0.375rem', padding: '1rem' }}>
                 <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 'bold', fontSize: '0.95rem', marginBottom: '0.5rem', color: 'var(--primary)' }}>
                   <HelpCircle size={18} /> Paste Format Template Instructions
                 </h4>
                 <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                  Paste questions separating each question block with a <strong>blank line</strong>. Format questions, options (letters like A., B. or a), b)) and the answer explicitly. 
+                  Pasted text or extracted text will be parsed by separating each question block with a <strong>blank line</strong>. 
                   You can specify overrides for <strong>Subject</strong> and <strong>Stream</strong> directly inside any block!
                 </p>
                 <pre style={{ fontSize: '0.75rem', background: 'var(--border)', padding: '0.5rem', borderRadius: '0.25rem', overflowX: 'auto', lineHeight: '1.4' }}>
@@ -668,22 +830,22 @@ Answer: a, c`}
 
               {/* Paste Area */}
               <div>
-                <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Paste Text Content</label>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Raw Text Content</label>
                 <textarea 
                   rows={10} 
                   required
                   value={bulkText} 
                   onChange={(e) => setBulkText(e.target.value)} 
-                  placeholder="Paste your paragraph or list of questions here..." 
+                  placeholder="Extracted file text or pasted paragraphs will appear here..." 
                   style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.875rem', lineHeight: '1.5', padding: '0.75rem' }}
                 />
               </div>
 
               <div style={{ display: 'flex', gap: '1rem' }}>
-                <button type="button" className="btn btn-primary" onClick={handleParseBulk}>
+                <button type="button" className="btn btn-primary" onClick={handleParseBulk} disabled={ocrLoading}>
                   <FileText size={18} /> Parse & Preview Questions
                 </button>
-                <button type="button" className="btn btn-outline" onClick={() => setEditingQuestion(null)}>Cancel</button>
+                <button type="button" className="btn btn-outline" onClick={() => setEditingQuestion(null)} disabled={ocrLoading}>Cancel</button>
               </div>
 
               {/* Preview List */}
