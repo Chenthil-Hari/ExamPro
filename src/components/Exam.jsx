@@ -425,8 +425,8 @@ export default function Exam({ stream, user, onComplete }) {
         </div>
 
         <button 
-          className="btn btn-primary" 
-          style={{ width: '100%', marginTop: '2rem', backgroundColor: 'var(--danger)' }}
+          className="btn btn-danger" 
+          style={{ width: '100%', marginTop: '2rem' }}
           onClick={() => setShowSubmitModal(true)}
         >
           Submit Exam
@@ -445,7 +445,7 @@ export default function Exam({ stream, user, onComplete }) {
               Switching tabs, applications, or exiting the exam layout is strictly prohibited. 
               Exiting the screen <strong>{3 - activeWarning} more time(s)</strong> will result in the immediate automatic submission of your exam!
             </p>
-            <button className="btn btn-primary" onClick={() => setActiveWarning(null)} style={{ width: '100%', backgroundColor: 'var(--danger)' }}>
+            <button className="btn btn-danger" onClick={() => setActiveWarning(null)} style={{ width: '100%' }}>
               I Understand, Resume Exam
             </button>
           </div>
@@ -466,12 +466,12 @@ export default function Exam({ stream, user, onComplete }) {
             </p>
             <div style={{ display: 'flex', gap: '1rem' }}>
               <button 
-                className="btn btn-primary" 
+                className="btn btn-danger" 
                 onClick={() => {
                   setShowSubmitModal(false);
                   handleSubmit();
                 }} 
-                style={{ flex: 1, backgroundColor: 'var(--danger)' }}
+                style={{ flex: 1 }}
               >
                 Yes, Submit Exam
               </button>

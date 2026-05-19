@@ -366,12 +366,19 @@ export default function CommunityForum({ user }) {
                 Attach Image or PDF (Optional)
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <input 
-                  type="file" 
-                  accept="image/*,application/pdf"
-                  onChange={(e) => handleFileUpload(e, 'question')}
-                  disabled={uploadingFile}
-                />
+                <label className="btn btn-outline" style={{ position: 'relative', cursor: 'pointer', margin: 0 }}>
+                  <span>Choose File</span>
+                  <input 
+                    type="file" 
+                    accept="image/*,application/pdf"
+                    onChange={(e) => handleFileUpload(e, 'question')}
+                    disabled={uploadingFile}
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                  />
+                </label>
+                <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                  {questionAttachment ? questionAttachment.split('/').pop() : 'No file selected'}
+                </span>
                 {uploadingFile && <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Uploading file...</span>}
               </div>
               {questionAttachment && (
@@ -527,12 +534,19 @@ export default function CommunityForum({ user }) {
                   Attach Image or PDF (Optional)
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <input 
-                    type="file" 
-                    accept="image/*,application/pdf"
-                    onChange={(e) => handleFileUpload(e, 'answer')}
-                    disabled={uploadingFile}
-                  />
+                  <label className="btn btn-outline" style={{ position: 'relative', cursor: 'pointer', margin: 0 }}>
+                    <span>Choose File</span>
+                    <input 
+                      type="file" 
+                      accept="image/*,application/pdf"
+                      onChange={(e) => handleFileUpload(e, 'answer')}
+                      disabled={uploadingFile}
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                    />
+                  </label>
+                  <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                    {answerAttachment ? answerAttachment.split('/').pop() : 'No file selected'}
+                  </span>
                   {uploadingFile && <span style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>Uploading file...</span>}
                 </div>
                 {answerAttachment && (
