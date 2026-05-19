@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, Plus, Edit2, Trash2, Check, X, ShieldAlert, Award, Calendar } from 'lucide-react';
+import { ChevronLeft, Plus, Edit2, Trash2, Check, X, ShieldAlert, CheckSquare, Square } from 'lucide-react';
 import { streams } from '../questions';
+
+const recommendedSubjects = {
+  neet: ['Biology', 'Physics', 'Chemistry'],
+  jee_main: ['Physics', 'Chemistry', 'Math'],
+  jee_advanced: ['Physics', 'Chemistry', 'Math'],
+  bitsat: ['Physics', 'Chemistry', 'Math', 'English', 'Logical Reasoning'],
+  iaat: ['Aptitude', 'Math', 'Logic'],
+  cuet: ['General Test', 'English', 'History', 'Science', 'Math']
+};
 
 export default function Admin({ user, onBack }) {
   const [activeTab, setActiveTab] = useState('users'); // 'users', 'logs', 'questions'
@@ -14,10 +23,13 @@ export default function Admin({ user, onBack }) {
   const [editingQuestion, setEditingQuestion] = useState(null); // null, 'add', or { questionObject }
   const [formStream, setFormStream] = useState('neet');
   const [formType, setFormType] = useState('MCQ');
-  const [formSubject, setFormSubject] = useState('');
+  const [formSubject, setFormSubject] = useState('Biology');
+  const [customSubjectActive, setCustomSubjectActive] = useState(false);
+  const [formCustomSubject, setFormCustomSubject] = useState('');
   const [formText, setFormText] = useState('');
   const [formOptions, setFormOptions] = useState(['', '', '', '']);
   const [formCorrect, setFormCorrect] = useState(''); // comma-separated indices or integer number
+  const [formNoNegative, setFormNoNegative] = useState(false);
 
   const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
 
@@ -36,8 +48,6 @@ export default function Admin({ user, onBack }) {
       } else if (activeTab === 'logs') {
         const res = await fetch(`${apiUrl}/admin/results`);
         const data = await res.json();
-        if (data.success) setLogs(data.results || data.results || data.results || data.results || data.results || data.results || data.results || data.results); // backend sent { success, results } or { success, logs } - let's check
-        // Wait, in server.js we did: `res.json({ success: true, results });` on GET /api/admin/results.
         if (data.success) setLogs(data.results);
       } else if (activeTab === 'questions') {
         const res = await fetch(`${apiUrl}/admin/questions`);
@@ -61,10 +71,13 @@ export default function Admin({ user, onBack }) {
     setEditingQuestion('add');
     setFormStream('neet');
     setFormType('MCQ');
-    setFormSubject('');
+    setFormSubject('Biology');
+    setCustomSubjectActive(false);
+    setFormCustomSubject('');
     setFormText('');
     setFormOptions(['', '', '', '']);
     setFormCorrect('');
+    setFormNoNegative(false);
   };
 
   // Open Edit Question Form
@@ -72,16 +85,65 @@ export default function Admin({ user, onBack }) {
     setEditingQuestion(q);
     setFormStream(q.streamId);
     setFormType(q.type);
-    setFormSubject(q.subject);
+    
+    const recs = recommendedSubjects[q.streamId] || [];
+    if (recs.includes(q.subject)) {
+      setFormSubject(q.subject);
+      setCustomSubjectActive(false);
+    } else {
+      setFormSubject('custom');
+      setCustomSubjectActive(true);
+      setFormCustomSubject(q.subject);
+    }
+    
     setFormText(q.text);
     setFormOptions(q.options || ['', '', '', '']);
     setFormCorrect(q.correct.join(', '));
+    setFormNoNegative(!!q.noNegative);
+  };
+
+  const handleStreamChange = (streamId) => {
+    setFormStream(streamId);
+    const recs = recommendedSubjects[streamId] || [];
+    setFormSubject(recs[0] || 'custom');
+    if (!recs.length) {
+      setCustomSubjectActive(true);
+    } else {
+      setCustomSubjectActive(false);
+    }
+  };
+
+  const handleTypeChange = (type) => {
+    setFormType(type);
+    setFormCorrect('');
+    if (type === 'Integer') {
+      setFormNoNegative(true);
+    } else {
+      setFormNoNegative(false);
+    }
+  };
+
+  const handleSubjectDropdownChange = (val) => {
+    if (val === 'custom') {
+      setFormSubject('custom');
+      setCustomSubjectActive(true);
+    } else {
+      setFormSubject(val);
+      setCustomSubjectActive(false);
+    }
   };
 
   // Submit Question Add/Edit
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     
+    // Determine subject name
+    const finalSubject = customSubjectActive ? formCustomSubject.trim() : formSubject;
+    if (!finalSubject) {
+      alert('Please specify a subject for the question.');
+      return;
+    }
+
     // Parse correct values
     let parsedCorrect = [];
     if (formType === 'Integer') {
@@ -101,10 +163,11 @@ export default function Admin({ user, onBack }) {
     const payload = {
       streamId: formStream,
       type: formType,
-      subject: formSubject,
+      subject: finalSubject,
       text: formText,
       options: formType === 'Integer' ? undefined : formOptions.filter(o => o.trim() !== ''),
-      correct: parsedCorrect
+      correct: parsedCorrect,
+      noNegative: formNoNegative
     };
 
     try {
@@ -223,21 +286,40 @@ export default function Admin({ user, onBack }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
               <div>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Exam Stream</label>
-                <select value={formStream} onChange={(e) => setFormStream(e.target.value)} style={{ width: '100%' }}>
+                <select value={formStream} onChange={(e) => handleStreamChange(e.target.value)} style={{ width: '100%' }}>
                   {streams.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div>
                 <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Question Type</label>
-                <select value={formType} onChange={(e) => { setFormType(e.target.value); setFormCorrect(''); }} style={{ width: '100%' }}>
+                <select value={formType} onChange={(e) => handleTypeChange(e.target.value)} style={{ width: '100%' }}>
                   <option value="MCQ">MCQ (Single Correct)</option>
                   <option value="MSQ">MSQ (Multi Correct)</option>
                   <option value="Integer">Integer Type</option>
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Subject (e.g. Physics)</label>
-                <input type="text" required value={formSubject} onChange={(e) => setFormSubject(e.target.value)} placeholder="Physics, Biology..." style={{ width: '100%' }} />
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.5rem' }}>Section / Subject</label>
+                <select 
+                  value={customSubjectActive ? 'custom' : formSubject} 
+                  onChange={(e) => handleSubjectDropdownChange(e.target.value)} 
+                  style={{ width: '100%', marginBottom: customSubjectActive ? '0.5rem' : '0' }}
+                >
+                  {(recommendedSubjects[formStream] || []).map(sub => (
+                    <option key={sub} value={sub}>{sub}</option>
+                  ))}
+                  <option value="custom">Other (Create Custom Section)</option>
+                </select>
+                {customSubjectActive && (
+                  <input 
+                    type="text" 
+                    required 
+                    value={formCustomSubject} 
+                    onChange={(e) => setFormCustomSubject(e.target.value)} 
+                    placeholder="Enter custom section/subject name" 
+                    style={{ width: '100%' }} 
+                  />
+                )}
               </div>
             </div>
 
@@ -278,23 +360,37 @@ export default function Admin({ user, onBack }) {
               </div>
             )}
 
-            <div>
-              <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.25rem' }}>
-                Correct Answer(s)
-              </label>
-              <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>
-                {formType === 'Integer' 
-                  ? 'Enter numerical answer (e.g. 42).' 
-                  : 'Enter index of correct options, separated by comma. Starts at 0 (e.g. "1" for Option B, "0, 2" for Option A and C).'}
-              </span>
-              <input 
-                type="text" 
-                required 
-                placeholder={formType === 'Integer' ? '42' : '0'} 
-                value={formCorrect} 
-                onChange={(e) => setFormCorrect(e.target.value)} 
-                style={{ width: '100%' }} 
-              />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+              <div>
+                <label style={{ display: 'block', fontWeight: '500', marginBottom: '0.25rem' }}>
+                  Correct Answer(s)
+                </label>
+                <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '0.5rem' }}>
+                  {formType === 'Integer' 
+                    ? 'Enter numerical answer (e.g. 42).' 
+                    : 'Enter index of correct options, separated by comma. Starts at 0 (e.g. "1" for Option B, "0, 2" for Option A and C).'}
+                </span>
+                <input 
+                  type="text" 
+                  required 
+                  placeholder={formType === 'Integer' ? '42' : '0'} 
+                  value={formCorrect} 
+                  onChange={(e) => setFormCorrect(e.target.value)} 
+                  style={{ width: '100%' }} 
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', userSelect: 'none' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={formNoNegative} 
+                    onChange={(e) => setFormNoNegative(e.target.checked)} 
+                    style={{ width: 'auto', margin: 0 }}
+                  />
+                  <span style={{ fontWeight: '500' }}>Enable "No Negative Marking" for this question</span>
+                </label>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
@@ -392,6 +488,11 @@ export default function Admin({ user, onBack }) {
                   <span style={{ padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(168, 85, 247, 0.1)', color: 'var(--status-marked)' }}>
                     {q.type}
                   </span>
+                  {q.noNegative && (
+                    <span style={{ padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(245, 158, 11, 0.1)', color: '#d97706' }}>
+                      No Negative Marking
+                    </span>
+                  )}
                 </div>
 
                 <p style={{ fontSize: '1.125rem', fontWeight: '500', marginBottom: '1rem' }}>{q.text}</p>
