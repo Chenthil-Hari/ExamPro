@@ -7,6 +7,7 @@ const User = require('./models/User');
 const Result = require('./models/Result');
 const Question = require('./models/Question');
 const Stream = require('./models/Stream');
+const CommunityQuestion = require('./models/CommunityQuestion');
 
 const defaultStreams = [
   { id: 'neet', name: 'NEET', subjectCount: 3, totalQuestions: 5, duration: 10, difficulty: 'Medium', marking: { correct: 4, wrong: -1 } },
@@ -236,6 +237,114 @@ app.put('/api/admin/streams/:id', async (req, res) => {
     );
     if (!stream) return res.status(404).json({ success: false, error: 'Stream not found' });
     res.json({ success: true, stream });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// --- COMMUNITY Q&A FORUM ROUTES ---
+
+// 1. Get all community questions
+app.get('/api/community/questions', async (req, res) => {
+  try {
+    const questions = await CommunityQuestion.find({}).sort({ createdAt: -1 });
+    res.json({ success: true, questions });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 2. Post a new community question
+app.post('/api/community/questions', async (req, res) => {
+  try {
+    const { title, content, subject, postedBy, authorName } = req.body;
+    if (!title || !content || !postedBy || !authorName) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+    const q = new CommunityQuestion({ title, content, subject, postedBy, authorName, upvotes: [], answers: [] });
+    await q.save();
+    res.json({ success: true, question: q });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3. Toggle upvote for a question
+app.post('/api/community/questions/:questionId/upvote', async (req, res) => {
+  try {
+    const { questionId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: 'Missing userId' });
+
+    const q = await CommunityQuestion.findById(questionId);
+    if (!q) return res.status(404).json({ success: false, error: 'Question not found' });
+
+    const idx = q.upvotes.indexOf(userId);
+    if (idx > -1) {
+      q.upvotes.splice(idx, 1); // remove upvote
+    } else {
+      q.upvotes.push(userId); // add upvote
+    }
+    await q.save();
+    res.json({ success: true, question: q });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4. Add an answer to a question
+app.post('/api/community/questions/:questionId/answers', async (req, res) => {
+  try {
+    const { questionId } = req.params;
+    const { content, postedBy, authorName } = req.body;
+    if (!content || !postedBy || !authorName) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+
+    const q = await CommunityQuestion.findById(questionId);
+    if (!q) return res.status(404).json({ success: false, error: 'Question not found' });
+
+    q.answers.push({ content, postedBy, authorName, upvotes: [], createdAt: new Date() });
+    await q.save();
+    res.json({ success: true, question: q });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 5. Toggle upvote for an answer
+app.post('/api/community/questions/:questionId/answers/:answerId/upvote', async (req, res) => {
+  try {
+    const { questionId, answerId } = req.params;
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, error: 'Missing userId' });
+
+    const q = await CommunityQuestion.findById(questionId);
+    if (!q) return res.status(404).json({ success: false, error: 'Question not found' });
+
+    const answer = q.answers.id(answerId);
+    if (!answer) return res.status(404).json({ success: false, error: 'Answer not found' });
+
+    const idx = answer.upvotes.indexOf(userId);
+    if (idx > -1) {
+      answer.upvotes.splice(idx, 1);
+    } else {
+      answer.upvotes.push(userId);
+    }
+    await q.save();
+    res.json({ success: true, question: q });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 6. Delete a question
+app.delete('/api/community/questions/:questionId', async (req, res) => {
+  try {
+    const { questionId } = req.params;
+    const q = await CommunityQuestion.findByIdAndDelete(questionId);
+    if (!q) return res.status(404).json({ success: false, error: 'Question not found' });
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

@@ -6,6 +6,7 @@ import Results from './components/Results';
 import Profile from './components/Profile';
 import LandingPage from './components/LandingPage';
 import Admin from './components/Admin';
+import CommunityForum from './components/CommunityForum';
 import { streams, questionBank } from './questions';
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
   const [examResult, setExamResult] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showCommunity, setShowCommunity] = useState(false);
   const [started, setStarted] = useState(false);
   const [streamsList, setStreamsList] = useState(streams);
 
@@ -72,6 +74,7 @@ function App() {
     setExamResult(null);
     setShowProfile(false);
     setShowAdmin(false);
+    setShowCommunity(false);
   };
 
   return (
@@ -92,11 +95,14 @@ function App() {
             {!stream && !examResult && (
               <>
                 {user.isAdmin && (
-                  <button className="btn btn-primary" onClick={() => { setShowAdmin(!showAdmin); setShowProfile(false); }}>
+                  <button className="btn btn-primary" onClick={() => { setShowAdmin(!showAdmin); setShowProfile(false); setShowCommunity(false); }}>
                     {showAdmin ? 'Home' : 'Admin Panel'}
                   </button>
                 )}
-                <button className="btn btn-outline" onClick={() => { setShowProfile(!showProfile); setShowAdmin(false); }}>
+                <button className="btn btn-outline" onClick={() => { setShowCommunity(!showCommunity); setShowProfile(false); setShowAdmin(false); }}>
+                  {showCommunity ? 'Home' : 'Community Forum'}
+                </button>
+                <button className="btn btn-outline" onClick={() => { setShowProfile(!showProfile); setShowAdmin(false); setShowCommunity(false); }}>
                   {showProfile ? 'Home' : 'Stats & Profile'}
                 </button>
                 <button className="btn btn-outline" onClick={handleLogout}>Logout</button>
@@ -111,7 +117,8 @@ function App() {
         {!user && started && <Login onLogin={handleLogin} />}
         {user && showAdmin && <Admin user={user} streams={streamsList} onUpdateStreams={setStreamsList} onBack={() => setShowAdmin(false)} />}
         {user && showProfile && <Profile user={user} streams={streamsList} onBack={() => setShowProfile(false)} />}
-        {user && !stream && !examResult && !showProfile && !showAdmin && <StreamSelection streams={streamsList} onSelect={handleStreamSelect} />}
+        {user && showCommunity && <CommunityForum user={user} />}
+        {user && !stream && !examResult && !showProfile && !showAdmin && !showCommunity && <StreamSelection streams={streamsList} onSelect={handleStreamSelect} />}
         {user && stream && !examResult && (
           <Exam 
             stream={stream} 

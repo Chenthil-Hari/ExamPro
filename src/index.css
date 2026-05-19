@@ -241,3 +241,9 @@ input[type="text"], input[type="number"], input[type="password"] {
 .animate-spin {
   animation: spin 1s linear infinite;
 }
+
+.forum-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+  border-color: var(--primary);
+}
