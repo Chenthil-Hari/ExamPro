@@ -83,6 +83,21 @@ export default function ResourceManager({ user }) {
         body: formData
       });
       
+      if (!res.ok) {
+        if (res.status === 413) {
+          throw new Error('File is too large. Please select a smaller file (under 10MB typically).');
+        }
+        // Try to parse error as JSON, fallback to status text if it's HTML
+        let errMsg = res.statusText;
+        try {
+          const errData = await res.json();
+          if (errData.error) errMsg = errData.error;
+        } catch (e) {
+          throw new Error(`Server returned ${res.status} ${res.statusText}. The file might be too large or the server proxy blocked it.`);
+        }
+        throw new Error(errMsg);
+      }
+      
       const data = await res.json();
       if (data.success) {
         setSuccess('File uploaded successfully!');
@@ -91,7 +106,7 @@ export default function ResourceManager({ user }) {
         setFile(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
       } else {
-        setError(data.error);
+        setError(data.error || 'Upload failed');
       }
     } catch (err) {
       setError('Failed to upload file. ' + err.message);
