@@ -27,7 +27,8 @@ const defaultStreams = [
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const fs = require('fs');
 const path = require('path');
@@ -645,6 +646,44 @@ app.post('/api/teacher/resources/upload', upload.single('file'), async (req, res
     await resource.save();
     res.json({ success: true, resource });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Alternative upload endpoint using JSON Base64 (bypasses proxy multipart limitations)
+app.post('/api/teacher/resources/upload-base64', async (req, res) => {
+  try {
+    const { batchId, title, uploadedBy, fileBase64, fileName } = req.body;
+    if (!batchId || !title || !uploadedBy || !fileBase64 || !fileName) {
+      return res.status(400).json({ success: false, error: 'Missing fields or file data' });
+    }
+
+    // Extract base64 data (remove data:application/pdf;base64, prefix if present)
+    const matches = fileBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    let base64Data = fileBase64;
+    if (matches && matches.length === 3) {
+      base64Data = matches[2];
+    }
+
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(fileName) || '.bin';
+    const finalName = 'file-' + uniqueSuffix + ext;
+    const filePath = path.join(uploadDir, finalName);
+
+    // Write file to disk
+    fs.writeFileSync(filePath, base64Data, 'base64');
+
+    const resource = new Resource({
+      batchId,
+      title,
+      type: 'file',
+      url: `/uploads/${finalName}`,
+      uploadedBy
+    });
+    await resource.save();
+    res.json({ success: true, resource });
+  } catch (error) {
+    console.error('Base64 Upload Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

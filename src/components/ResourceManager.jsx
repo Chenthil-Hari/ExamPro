@@ -72,45 +72,58 @@ export default function ResourceManager({ user }) {
       setError('');
       setSuccess('');
       
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('batchId', selectedBatch);
-      formData.append('title', title);
-      formData.append('uploadedBy', user.userId || user.id);
-      
-      const res = await fetch(`${apiUrl}/teacher/resources/upload`, {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!res.ok) {
-        if (res.status === 413) {
-          throw new Error('File is too large. Please select a smaller file (under 10MB typically).');
-        }
-        // Try to parse error as JSON, fallback to status text if it's HTML
-        let errMsg = res.statusText;
+      // Read file as Base64 to bypass strict proxy multipart limitations
+      const reader = new FileReader();
+      reader.onloadend = async () => {
         try {
-          const errData = await res.json();
-          if (errData.error) errMsg = errData.error;
-        } catch (e) {
-          throw new Error(`Server returned ${res.status} ${res.statusText}. The file might be too large or the server proxy blocked it.`);
+          const fileBase64 = reader.result;
+          
+          const res = await fetch(`${apiUrl}/teacher/resources/upload-base64`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              batchId: selectedBatch,
+              title,
+              uploadedBy: user.userId || user.id,
+              fileBase64,
+              fileName: file.name
+            })
+          });
+          
+          if (!res.ok) {
+            let errMsg = res.statusText;
+            try {
+              const errData = await res.json();
+              if (errData.error) errMsg = errData.error;
+            } catch (e) {
+              throw new Error(`Server returned ${res.status} ${res.statusText}.`);
+            }
+            throw new Error(errMsg);
+          }
+          
+          const data = await res.json();
+          if (data.success) {
+            setSuccess('File uploaded successfully!');
+            setResources([data.resource, ...resources]);
+            setTitle('');
+            setFile(null);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+          } else {
+            setError(data.error || 'Upload failed');
+          }
+        } catch (err) {
+          setError('Failed to upload file. ' + err.message);
+        } finally {
+          setLoading(false);
         }
-        throw new Error(errMsg);
-      }
-      
-      const data = await res.json();
-      if (data.success) {
-        setSuccess('File uploaded successfully!');
-        setResources([data.resource, ...resources]);
-        setTitle('');
-        setFile(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      } else {
-        setError(data.error || 'Upload failed');
-      }
+      };
+      reader.onerror = () => {
+        setError('Failed to read the file locally.');
+        setLoading(false);
+      };
+      reader.readAsDataURL(file);
     } catch (err) {
-      setError('Failed to upload file. ' + err.message);
-    } finally {
+      setError('Failed to process upload request.');
       setLoading(false);
     }
   };
