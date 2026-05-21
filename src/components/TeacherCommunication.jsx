@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Plus, Bell, Loader2, Send } from 'lucide-react';
 
@@ -21,7 +22,7 @@ export default function TeacherCommunication({ user }) {
   const [loadingStudents, setLoadingStudents] = useState(false);
 
   const chatEndRef = useRef(null);
-  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+  const apiUrl = API_URL;
 
   // Load teacher batches & announcements on mount
   useEffect(() => {

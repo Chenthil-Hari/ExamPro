@@ -1,3 +1,4 @@
+import { API_URL } from './config';
 import { useState, useEffect } from 'react';
 import Login from './components/Login';
 import StreamSelection from './components/StreamSelection';
@@ -45,7 +46,7 @@ function App() {
     }
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+      const apiUrl = API_URL;
       
       // Fetch batch details first to get the batch name
       const detailRes = await fetch(`${apiUrl}/teacher/batches/${batchId}`);
@@ -116,7 +117,7 @@ function App() {
 
     const fetchStreams = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+        const apiUrl = API_URL;
         const res = await fetch(`${apiUrl}/streams`);
         const data = await res.json();
         if (data.success && data.streams.length > 0) {

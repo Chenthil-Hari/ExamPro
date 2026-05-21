@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { ChevronLeft, Plus, Edit2, Trash2, Check, X, ShieldAlert, FileText, CheckCircle, AlertTriangle, HelpCircle, Upload, Loader2 } from 'lucide-react';
 
@@ -79,7 +80,7 @@ export default function Admin({ user, streams, onUpdateStreams, onBack }) {
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState('');
 
-  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+  const apiUrl = API_URL;
 
   useEffect(() => {
     fetchData();

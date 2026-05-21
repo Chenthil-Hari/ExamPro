@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { Users, Plus, Trash2, UserPlus, Loader2, BookOpen, Link } from 'lucide-react';
 
@@ -18,7 +19,7 @@ export default function BatchManager({ user }) {
       .catch(err => console.error('Failed to copy link:', err));
   };
 
-  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+  const apiUrl = API_URL;
 
   const fetchBatches = async () => {
     try {

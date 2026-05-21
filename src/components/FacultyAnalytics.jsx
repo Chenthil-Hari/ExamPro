@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { BarChart2, Loader2, Award, AlertTriangle, HelpCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 
@@ -15,7 +16,7 @@ export default function FacultyAnalytics({ user }) {
   const [studentResults, setStudentResults] = useState([]);
   const [loadingStudent, setLoadingStudent] = useState(false);
 
-  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+  const apiUrl = API_URL;
 
   // Load teacher batches
   useEffect(() => {

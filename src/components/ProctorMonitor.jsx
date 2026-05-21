@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { Eye, AlertTriangle, Monitor, ShieldAlert, Clock, Power, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 
@@ -7,7 +8,7 @@ export default function ProctorMonitor({ user }) {
   const [forcingId, setForcingId] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+  const apiUrl = API_URL;
 
   const fetchActiveExams = async (showLoading = false) => {
     try {

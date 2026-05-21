@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { MessageSquare, ThumbsUp, Plus, ArrowLeft, Trash2, UserCircle, Calendar, Tag, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -26,7 +27,7 @@ export default function CommunityForum({ user }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('All');
 
-  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+  const apiUrl = API_URL;
 
   // Fetch all questions
   const fetchQuestions = async () => {

@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { BookOpen, Clock, BarChart, Calendar, AlertCircle, FileText, CheckCircle, ArrowRight } from 'lucide-react';
 
@@ -7,7 +8,7 @@ export default function StreamSelection({ streams, onSelect, user }) {
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(new Date());
 
-  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+  const apiUrl = API_URL;
 
   useEffect(() => {
     // Update current time every 5 seconds to keep timing buttons accurate

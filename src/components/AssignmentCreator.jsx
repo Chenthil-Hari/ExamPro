@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { Calendar, Plus, Trash2, Loader2, BookOpen, Clock, AlertCircle } from 'lucide-react';
 
@@ -22,7 +23,7 @@ export default function AssignmentCreator({ user, streams }) {
   const [qSubject, setQSubject] = useState('');
   const [loadingQuestions, setLoadingQuestions] = useState(false);
 
-  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+  const apiUrl = API_URL;
 
   const fetchData = async () => {
     try {

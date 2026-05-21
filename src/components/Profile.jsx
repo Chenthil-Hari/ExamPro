@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { Award, BookOpen, Clock, ChevronLeft, Calendar, Trash2, CheckCircle, HelpCircle, Check, Loader2 } from 'lucide-react';
 import { streams } from '../questions';
@@ -24,7 +25,7 @@ export default function Profile({ user, onBack }) {
         return;
       }
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+        const apiUrl = API_URL;
         
         // Fetch results
         const resResults = await fetch(`${apiUrl}/users/${user.id}/results`);
@@ -67,7 +68,7 @@ export default function Profile({ user, onBack }) {
       return;
     }
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+      const apiUrl = API_URL;
       const res = await fetch(`${apiUrl}/users/${user.id}/bookmarks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { AlertCircle, Clock, Maximize, Flag, Star, Loader2, HelpCircle } from 'lucide-react';
 
@@ -41,7 +42,7 @@ export default function Exam({ stream, user, onComplete }) {
 
     const initActiveExam = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+        const apiUrl = API_URL;
         await fetch(`${apiUrl}/exams/active`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -68,7 +69,7 @@ export default function Exam({ stream, user, onComplete }) {
 
     const pollInterval = setInterval(async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+        const apiUrl = API_URL;
         const res = await fetch(`${apiUrl}/exams/active/status/${user.id}`);
         const data = await res.json();
         if (data.success && data.forceSubmit) {
@@ -96,7 +97,7 @@ export default function Exam({ stream, user, onComplete }) {
     }
     const fetchBookmarks = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+        const apiUrl = API_URL;
         const res = await fetch(`${apiUrl}/users/${user.id}/bookmarks`);
         const data = await res.json();
         if (data.success) {
@@ -137,7 +138,7 @@ export default function Exam({ stream, user, onComplete }) {
         if (stream.customQuestions && stream.customQuestions.length > 0) {
           loadedList = stream.customQuestions;
         } else {
-          const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+          const apiUrl = API_URL;
           const res = await fetch(`${apiUrl}/questions/${stream.id}?limit=${stream.totalQuestions || 5}`);
           const data = await res.json();
           if (!data.success || !data.questions.length) {
@@ -229,7 +230,7 @@ export default function Exam({ stream, user, onComplete }) {
         setWarnings(w => {
           const newW = w + 1;
           if (user && !user.isGuest) {
-            const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+            const apiUrl = API_URL;
             fetch(`${apiUrl}/exams/active/warning`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -347,7 +348,7 @@ export default function Exam({ stream, user, onComplete }) {
       return;
     }
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+      const apiUrl = API_URL;
       const res = await fetch(`${apiUrl}/users/${user.id}/bookmarks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

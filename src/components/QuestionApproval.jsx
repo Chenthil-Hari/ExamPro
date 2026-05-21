@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
 import { ClipboardCheck, Loader2, Eye, Check, X, Tag, Plus, HelpCircle } from 'lucide-react';
 
@@ -23,7 +24,7 @@ export default function QuestionApproval({ user, streams }) {
   const [newDifficulty, setNewDifficulty] = useState('Medium');
   const [newTagsText, setNewTagsText] = useState('');
 
-  const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+  const apiUrl = API_URL;
 
   const fetchPending = async () => {
     try {

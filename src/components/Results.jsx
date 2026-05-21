@@ -1,3 +1,4 @@
+import { API_URL } from '../config';
 import { useEffect, useRef } from 'react';
 import { streams } from '../questions';
 import { Home, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
@@ -54,7 +55,7 @@ export default function Results({ result, user, onHome }) {
     if (!sentRef.current && user) {
       sentRef.current = true;
       if (!user.isGuest) {
-        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+        const apiUrl = API_URL;
         fetch(`${apiUrl}/results`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
