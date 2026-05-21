@@ -650,7 +650,7 @@ app.post('/api/teacher/resources/upload', upload.single('file'), async (req, res
   }
 });
 
-// Alternative upload endpoint using JSON Base64 (bypasses proxy multipart limitations)
+// Upload endpoint using JSON Base64 — stores file in MongoDB (no filesystem needed)
 app.post('/api/teacher/resources/upload-base64', async (req, res) => {
   try {
     const { batchId, title, uploadedBy, fileBase64, fileName } = req.body;
@@ -658,32 +658,55 @@ app.post('/api/teacher/resources/upload-base64', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing fields or file data' });
     }
 
-    // Extract base64 data (remove data:application/pdf;base64, prefix if present)
+    // Parse data URL: "data:<mime>;base64,<data>"
     const matches = fileBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
     let base64Data = fileBase64;
+    let mimeType = 'application/octet-stream';
     if (matches && matches.length === 3) {
+      mimeType = matches[1];
       base64Data = matches[2];
     }
 
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(fileName) || '.bin';
-    const finalName = 'file-' + uniqueSuffix + ext;
-    const filePath = path.join(uploadDir, finalName);
-
-    // Write file to disk
-    fs.writeFileSync(filePath, base64Data, 'base64');
-
+    // Store file data directly in MongoDB — avoids EROFS on read-only filesystems
     const resource = new Resource({
       batchId,
       title,
       type: 'file',
-      url: `/uploads/${finalName}`,
-      uploadedBy
+      url: '', // will be set after save so we have the _id
+      uploadedBy,
+      fileData: base64Data,
+      fileName,
+      mimeType
     });
     await resource.save();
+
+    // Build a URL that points back to our serve endpoint
+    resource.url = `/api/resources/file/${resource._id}`;
+    await resource.save();
+
     res.json({ success: true, resource });
   } catch (error) {
     console.error('Base64 Upload Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Serve a file stored in MongoDB by resource _id
+app.get('/api/resources/file/:id', async (req, res) => {
+  try {
+    const resource = await Resource.findById(req.params.id);
+    if (!resource || resource.type !== 'file' || !resource.fileData) {
+      return res.status(404).json({ success: false, error: 'File not found' });
+    }
+    const buffer = Buffer.from(resource.fileData, 'base64');
+    const mime = resource.mimeType || 'application/octet-stream';
+    const safeName = encodeURIComponent(resource.fileName || 'download');
+    res.set('Content-Type', mime);
+    res.set('Content-Disposition', `inline; filename="${safeName}"`);
+    res.set('Content-Length', buffer.length);
+    res.send(buffer);
+  } catch (error) {
+    console.error('File Serve Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

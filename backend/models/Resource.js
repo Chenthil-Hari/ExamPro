@@ -5,7 +5,11 @@ const ResourceSchema = new mongoose.Schema({
   title: { type: String, required: true },
   type: { type: String, enum: ['file', 'link'], required: true },
   url: { type: String, required: true }, // URL or File path
-  uploadedBy: { type: String, required: true } // teacherId
+  uploadedBy: { type: String, required: true }, // teacherId
+  // For file uploads: store file data in MongoDB to avoid read-only filesystem issues
+  fileData: { type: String, default: null },   // base64 encoded file content
+  fileName: { type: String, default: null },    // original file name
+  mimeType: { type: String, default: null }     // e.g. 'application/pdf'
 }, { timestamps: true });
 
 module.exports = mongoose.model('Resource', ResourceSchema);

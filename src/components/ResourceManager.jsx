@@ -293,14 +293,14 @@ export default function ResourceManager({ user }) {
                   </div>
                   
                   <a 
-                    href={res.type === 'link' ? res.url : `${apiUrl.replace('/api', '')}${res.url}`} 
+                    href={res.type === 'link' ? res.url : `${apiUrl.replace('/api', '')}${res.url}`}
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="btn btn-outline"
                     style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
                   >
                     {res.type === 'link' ? <ExternalLink size={16} /> : <BookOpen size={16} />}
-                    {res.type === 'link' ? 'Open' : 'View'}
+                    {res.type === 'link' ? 'Open' : 'View File'}
                   </a>
                 </div>
               ))}
