@@ -637,17 +637,30 @@ app.post('/api/teacher/resources/upload-base64', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing fields or file data' });
     }
 
-    // Parse MIME type from data URL
-    const matches = fileBase64.match(/^data:([A-Za-z-+\/]+);base64,/);
+    // Parse base64 data to get just the raw string
+    const matches = fileBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
     const mimeType = matches ? matches[1] : 'application/octet-stream';
+    const base64Data = matches ? matches[2] : fileBase64;
+    
     const ext = path.extname(fileName).replace('.', '') || 'pdf';
+    const baseName = path.parse(fileName).name.replace(/[^a-zA-Z0-9]/g, '_');
 
-    // Upload to Cloudinary using the data URL directly
-    const uploadResult = await cloudinary.uploader.upload(fileBase64, {
-      folder: 'exampro/resources',
-      resource_type: 'raw',      // 'raw' supports PDFs, DOCX, PPT etc.
-      public_id: `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9]/g, '_')}`,
-      format: ext
+    // Upload to Cloudinary using upload_stream (required for raw base64 data to avoid corruption)
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'exampro/resources',
+          resource_type: 'raw',
+          public_id: `${Date.now()}-${baseName}`,
+          format: ext
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      // Convert base64 string back to binary buffer and send to stream
+      uploadStream.end(Buffer.from(base64Data, 'base64'));
     });
 
     const resource = new Resource({
