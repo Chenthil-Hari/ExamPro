@@ -52,8 +52,7 @@ app.use('/uploads', express.static(uploadDir));
 
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB Atlas
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/examDB')
+mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://chenthilhari_db_user:Yx6QhpxRt1LT5ONu@cluster0.f4v8akm.mongodb.net/examDB?appName=Cluster0')
 .then(() => console.log('✅ Connected to MongoDB Atlas'))
 .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
@@ -73,44 +72,73 @@ app.get('/api/streams', async (req, res) => {
   }
 });
 
-// 1. User Login (Upsert User)
-app.post('/api/login', async (req, res) => {
+// 1. User Sign Up (Register User)
+app.post('/api/signup', async (req, res) => {
   try {
-    const { id, name, password, isGuest } = req.body;
-    
-    // Validate Admin credentials
-    if (id === 'STU_hari@gmail.com' || name === 'hari@gmail.com') {
-      if (password !== 'hari123') {
-        return res.status(401).json({ success: false, error: 'Incorrect password for Admin account' });
-      }
+    const { id, name, password, isTeacher } = req.body;
+    if (!id || !name || !password) {
+      return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
 
-    const isTeacherRole = id.startsWith('TCH_');
+    const existingUser = await User.findOne({ userId: id });
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: 'User already exists. Please login.' });
+    }
+
+    const isTeacherRole = id.startsWith('TCH_') || isTeacher;
+    const isAdmin = id === 'STU_hari@gmail.com' || id.toLowerCase().includes('admin');
+
+    const user = new User({
+      userId: id,
+      name,
+      password,
+      isGuest: false,
+      isAdmin,
+      isTeacher: isTeacherRole
+    });
+
+    await user.save();
+    res.json({ success: true, user });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 2. User Login
+app.post('/api/login', async (req, res) => {
+  try {
+    const { id, password } = req.body;
+    if (!id || !password) {
+      return res.status(400).json({ success: false, error: 'User ID and password are required' });
+    }
+
+    // Validate Admin credentials override
+    if (id === 'STU_hari@gmail.com' && password !== 'hari123') {
+      return res.status(401).json({ success: false, error: 'Incorrect password for Admin account' });
+    }
 
     let user = await User.findOne({ userId: id });
     if (!user) {
-      const isAdmin = id === 'STU_hari@gmail.com' || id.toLowerCase().includes('admin');
-      user = new User({ 
-        userId: id, 
-        name, 
-        isGuest, 
-        isAdmin, 
-        isTeacher: isTeacherRole,
-        password: password || undefined
-      });
-      await user.save();
-    } else {
-      // If it's a teacher, validate password
-      if (isTeacherRole && user.password && user.password !== password) {
-        return res.status(401).json({ success: false, error: 'Incorrect password for Teacher account' });
-      }
-      // Ensure admin flag is active on existing record
-      if (id === 'STU_hari@gmail.com' && !user.isAdmin) {
-        user.isAdmin = true;
-        await user.save();
-      }
+      return res.status(404).json({ success: false, error: 'User does not exist. Please sign up first.' });
     }
-    
+
+    // Validate password
+    if (user.password && user.password !== password) {
+      return res.status(401).json({ success: false, error: 'Incorrect password' });
+    }
+
+    // Auto-save password if not set in DB
+    if (!user.password) {
+      user.password = password;
+      await user.save();
+    }
+
+    // Ensure admin flag is active on existing record
+    if (id === 'STU_hari@gmail.com' && !user.isAdmin) {
+      user.isAdmin = true;
+      await user.save();
+    }
+
     res.json({ success: true, user });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -815,3 +843,5 @@ app.post('/api/teacher/questions/approve/:id', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
+
+module.exports = app;
