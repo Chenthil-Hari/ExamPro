@@ -7,6 +7,8 @@ export default function StreamSelection({ streams, onSelect, user }) {
   const [completedAssignmentIds, setCompletedAssignmentIds] = useState(new Set());
   const [batches, setBatches] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [attendance, setAttendance] = useState(null);
+  const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(new Date());
   const [dashboardNotification, setDashboardNotification] = useState(null);
@@ -58,9 +60,28 @@ export default function StreamSelection({ streams, onSelect, user }) {
         const batchesRes = await fetch(`${apiUrl}/student/batches?studentId=${user.id}`);
         const batchesData = await batchesRes.json();
 
+        // Fetch attendance
+        const attRes = await fetch(`${apiUrl}/student/attendance?studentId=${user.id}`);
+        const attData = await attRes.json();
+
         // Fetch announcements
         const announcementsRes = await fetch(`${apiUrl}/announcements?studentId=${user.id}`);
         const announcementsData = await announcementsRes.json();
+
+        // Fetch resources for all batches
+        let allResources = [];
+        if (batchesData.success && batchesData.batches.length > 0) {
+          const resPromises = batchesData.batches.map(b => fetch(`${apiUrl}/resources/${b._id}`).then(r => r.json()));
+          const resResults = await Promise.all(resPromises);
+          resResults.forEach((data, index) => {
+            if (data.success && data.resources.length > 0) {
+              const mapped = data.resources.map(r => ({ ...r, batchName: batchesData.batches[index].name }));
+              allResources = [...allResources, ...mapped];
+            }
+          });
+          // Sort descending by date
+          allResources.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        }
 
         if (assignmentsData.success) {
           setAssignments(assignmentsData.assignments);
@@ -96,6 +117,10 @@ export default function StreamSelection({ streams, onSelect, user }) {
           setBatches(batchesData.batches);
         }
 
+        if (attData.success) {
+          setAttendance(attData);
+        }
+
         if (announcementsData.success) {
           setAnnouncements(announcementsData.announcements);
 
@@ -105,17 +130,18 @@ export default function StreamSelection({ streams, onSelect, user }) {
               if ('Notification' in window && Notification.permission === 'granted') {
                 newAnns.forEach(a => {
                   new Notification('New Announcement', {
-                    body: a.title || a.message || 'You have a new notice.',
-                    icon: '/favicon.ico'
-                  });
-                });
-              }
-              setDashboardNotification({ type: 'info', message: `New Notice: ${newAnns[0].title || 'Check the notice board.'}` });
+          if (!isFirst && prevAnnouncementsRef.current) {
+            if (announcementsData.announcements.length > prevAnnouncementsRef.current.length) {
+              const newAnnouncement = announcementsData.announcements[0];
+              triggerOSNotification('New Announcement', newAnnouncement.title || 'You have a new notice.');
+              setDashboardNotification({ type: 'info', message: `New Notice: ${newAnnouncement.title || 'Check the notice board.'}` });
               setTimeout(() => setDashboardNotification(null), 5000);
             }
           }
-          prevAnnouncementsRef.current = new Set(announcementsData.announcements.map(a => a._id));
+          prevAnnouncementsRef.current = announcementsData.announcements;
         }
+
+        setResources(allResources);
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
       } finally {
@@ -473,6 +499,86 @@ export default function StreamSelection({ streams, onSelect, user }) {
                     <span style={{ fontSize: '0.75rem', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--primary)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
                       Active
                     </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Attendance Card */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+              <Calendar size={20} color="var(--primary)" />
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: 0 }}>My Attendance</h3>
+            </div>
+            
+            {attendance ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Overall Attendance</span>
+                  <span style={{ 
+                    fontSize: '1.25rem', 
+                    fontWeight: '800', 
+                    color: attendance.summary.attendancePercentage >= 75 ? '#10b981' : 'var(--warning)' 
+                  }}>
+                    {attendance.summary.attendancePercentage}%
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {attendance.records.slice(0, 3).map((r, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem', background: 'var(--bg)', borderRadius: '0.25rem', border: '1px solid var(--border)' }}>
+                      <div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '600' }}>{r.date}</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{r.batchName}</div>
+                      </div>
+                      <span style={{ 
+                        fontSize: '0.75rem', 
+                        padding: '0.2rem 0.5rem', 
+                        borderRadius: '1rem', 
+                        background: r.status === 'Present' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        color: r.status === 'Present' ? '#10b981' : '#ef4444',
+                        fontWeight: 'bold'
+                      }}>
+                        {r.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', margin: '1rem 0' }}>
+                No attendance records yet.
+              </p>
+            )}
+          </div>
+
+          {/* Resources Card */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+              <BookOpen size={20} color="var(--primary)" />
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: 0 }}>Study Materials</h3>
+            </div>
+            
+            {resources.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', margin: '1rem 0' }}>
+                No materials shared yet.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {resources.slice(0, 5).map(res => (
+                  <div key={res._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '0.375rem' }}>
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '0.9rem' }}>{res.title}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{res.batchName}</div>
+                    </div>
+                    <a 
+                      href={res.type === 'link' ? res.url : `${apiUrl.replace('/api', '')}${res.url}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--primary)', fontWeight: 'bold' }}
+                    >
+                      {res.type === 'link' ? 'Open' : 'View'}
+                    </a>
                   </div>
                 ))}
               </div>

@@ -9,6 +9,8 @@ const Question = require('./models/Question');
 const Stream = require('./models/Stream');
 const CommunityQuestion = require('./models/CommunityQuestion');
 const Batch = require('./models/Batch');
+const Attendance = require('./models/Attendance');
+const Resource = require('./models/Resource');
 const Assignment = require('./models/Assignment');
 const Announcement = require('./models/Announcement');
 const Message = require('./models/Message');
@@ -523,6 +525,18 @@ app.post('/api/teacher/batches/join', async (req, res) => {
   }
 });
 
+app.get('/api/teacher/batches/:batchId/students', async (req, res) => {
+  try {
+    const batch = await Batch.findById(req.params.batchId);
+    if (!batch) return res.status(404).json({ success: false, error: 'Batch not found' });
+    
+    const students = await User.find({ userId: { $in: batch.students } }, 'userId name');
+    res.json({ success: true, students });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 1b. Get Batches joined by a student (includes teacher names)
 app.get('/api/student/batches', async (req, res) => {
   try {
@@ -546,7 +560,123 @@ app.get('/api/student/batches', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+// 1c. Attendance Management
+app.get('/api/teacher/attendance/:batchId', async (req, res) => {
+  try {
+    const { date } = req.query; // optional filter by date
+    let query = { batchId: req.params.batchId };
+    if (date) query.date = date;
+    const records = await Attendance.find(query).sort({ date: -1 });
+    res.json({ success: true, records });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
+app.post('/api/teacher/attendance', async (req, res) => {
+  try {
+    const { batchId, date, records, recordedBy } = req.body;
+    if (!batchId || !date || !records || !recordedBy) {
+      return res.status(400).json({ success: false, error: 'Missing fields' });
+    }
+    // Upsert attendance
+    const attendance = await Attendance.findOneAndUpdate(
+      { batchId, date },
+      { records, recordedBy },
+      { new: true, upsert: true }
+    );
+    res.json({ success: true, attendance });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/student/attendance', async (req, res) => {
+  try {
+    const { studentId } = req.query;
+    if (!studentId) return res.status(400).json({ success: false, error: 'studentId is required' });
+    
+    const studentBatches = await Batch.find({ students: studentId });
+    const batchIds = studentBatches.map(b => b._id);
+    
+    const attendances = await Attendance.find({ batchId: { $in: batchIds } }).populate('batchId').sort({ date: -1 });
+    
+    const studentRecords = [];
+    let presentCount = 0;
+    let totalCount = 0;
+
+    attendances.forEach(att => {
+      const record = att.records.find(r => r.studentId === studentId);
+      if (record) {
+        totalCount++;
+        if (record.status === 'Present') presentCount++;
+        
+        studentRecords.push({
+          date: att.date,
+          batchName: att.batchId ? att.batchId.name : 'Unknown Batch',
+          status: record.status,
+          recordedBy: att.recordedBy
+        });
+      }
+    });
+
+    const attendancePercentage = totalCount > 0 ? ((presentCount / totalCount) * 100).toFixed(1) : 100;
+    
+    res.json({ success: true, records: studentRecords, summary: { presentCount, totalCount, attendancePercentage } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 1d. Study Material & Resources
+app.post('/api/teacher/resources/upload', upload.single('file'), async (req, res) => {
+  try {
+    const { batchId, title, uploadedBy } = req.body;
+    if (!req.file || !batchId || !title || !uploadedBy) {
+      return res.status(400).json({ success: false, error: 'Missing fields or file' });
+    }
+    const resource = new Resource({
+      batchId,
+      title,
+      type: 'file',
+      url: `/uploads/${req.file.filename}`,
+      uploadedBy
+    });
+    await resource.save();
+    res.json({ success: true, resource });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/teacher/resources/link', async (req, res) => {
+  try {
+    const { batchId, title, url, uploadedBy } = req.body;
+    if (!batchId || !title || !url || !uploadedBy) {
+      return res.status(400).json({ success: false, error: 'Missing fields' });
+    }
+    const resource = new Resource({
+      batchId,
+      title,
+      type: 'link',
+      url,
+      uploadedBy
+    });
+    await resource.save();
+    res.json({ success: true, resource });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/resources/:batchId', async (req, res) => {
+  try {
+    const resources = await Resource.find({ batchId: req.params.batchId }).sort({ createdAt: -1 });
+    res.json({ success: true, resources });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // 2. Assignments Management
 app.get('/api/teacher/assignments', async (req, res) => {

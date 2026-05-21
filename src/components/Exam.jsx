@@ -244,6 +244,13 @@ export default function Exam({ stream, user, onComplete }) {
               setActiveWarning(newW);
             }
           }, 0);
+          
+          fetch(`${API_URL}/exams/active/warning`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id })
+          }).catch(err => console.error('Failed to log warning', err));
+
           return newW;
         });
       }

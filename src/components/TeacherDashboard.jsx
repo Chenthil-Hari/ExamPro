@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Users, Calendar, BarChart2, MessageSquare, ClipboardCheck, Eye } from 'lucide-react';
+import { Users, Calendar, BarChart2, MessageSquare, ClipboardCheck, Eye, BookOpen } from 'lucide-react';
 import BatchManager from './BatchManager';
 import AssignmentCreator from './AssignmentCreator';
 import FacultyAnalytics from './FacultyAnalytics';
 import TeacherCommunication from './TeacherCommunication';
 import QuestionApproval from './QuestionApproval';
 import ProctorMonitor from './ProctorMonitor';
+import AttendanceManager from './AttendanceManager';
+import ResourceManager from './ResourceManager';
 
 export default function TeacherDashboard({ user, streams, onBack }) {
   const [activeTab, setActiveTab] = useState('batches');
@@ -15,6 +17,8 @@ export default function TeacherDashboard({ user, streams, onBack }) {
     { id: 'assignments', label: 'Assignments', icon: Calendar },
     { id: 'analytics', label: 'Analytics', icon: BarChart2 },
     { id: 'communication', label: 'Communication', icon: MessageSquare },
+    { id: 'attendance', label: 'Attendance', icon: ClipboardCheck },
+    { id: 'resources', label: 'Materials & Links', icon: BookOpen },
     { id: 'questions', label: 'Question Bank', icon: ClipboardCheck },
     { id: 'proctor', label: 'Proctor Monitor', icon: Eye }
   ];
@@ -29,6 +33,10 @@ export default function TeacherDashboard({ user, streams, onBack }) {
         return <FacultyAnalytics user={user} />;
       case 'communication':
         return <TeacherCommunication user={user} />;
+      case 'attendance':
+        return <AttendanceManager user={user} />;
+      case 'resources':
+        return <ResourceManager user={user} />;
       case 'questions':
         return <QuestionApproval user={user} streams={streams} />;
       case 'proctor':
