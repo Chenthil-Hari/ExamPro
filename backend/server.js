@@ -508,6 +508,31 @@ app.post('/api/teacher/batches/join', async (req, res) => {
   }
 });
 
+// 1b. Get Batches joined by a student (includes teacher names)
+app.get('/api/student/batches', async (req, res) => {
+  try {
+    const { studentId } = req.query;
+    if (!studentId) return res.status(400).json({ success: false, error: 'studentId is required' });
+    const batches = await Batch.find({ students: studentId }).sort({ createdAt: -1 });
+    
+    // Fetch teachers' names for each batch
+    const batchesWithTeacherNames = await Promise.all(
+      batches.map(async (batch) => {
+        const teacher = await User.findOne({ userId: batch.teacherId });
+        return {
+          ...batch.toObject(),
+          teacherName: teacher ? teacher.name : 'Unknown Faculty'
+        };
+      })
+    );
+    
+    res.json({ success: true, batches: batchesWithTeacherNames });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
 // 2. Assignments Management
 app.get('/api/teacher/assignments', async (req, res) => {
   try {

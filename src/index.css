@@ -274,3 +274,34 @@ input[type="text"], input[type="number"], input[type="password"] {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
   border-color: var(--primary);
 }
+
+/* Student Dashboard Layout */
+.student-dashboard-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (min-width: 992px) {
+  .student-dashboard-layout {
+    grid-template-columns: 1.8fr 1.2fr;
+  }
+}
+
+.sidebar-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.notice-item {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1rem;
+}
+
+.notice-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+

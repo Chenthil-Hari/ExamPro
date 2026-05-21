@@ -1,10 +1,12 @@
 import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
-import { BookOpen, Clock, BarChart, Calendar, AlertCircle, FileText, CheckCircle, ArrowRight } from 'lucide-react';
+import { BookOpen, Clock, BarChart, Calendar, AlertCircle, FileText, CheckCircle, ArrowRight, Users, Megaphone } from 'lucide-react';
 
 export default function StreamSelection({ streams, onSelect, user }) {
   const [assignments, setAssignments] = useState([]);
   const [completedAssignmentIds, setCompletedAssignmentIds] = useState(new Set());
+  const [batches, setBatches] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(new Date());
 
@@ -30,6 +32,14 @@ export default function StreamSelection({ streams, onSelect, user }) {
         const resultsRes = await fetch(`${apiUrl}/users/${user.id}/results`);
         const resultsData = await resultsRes.json();
 
+        // Fetch student batches
+        const batchesRes = await fetch(`${apiUrl}/student/batches?studentId=${user.id}`);
+        const batchesData = await batchesRes.json();
+
+        // Fetch announcements
+        const announcementsRes = await fetch(`${apiUrl}/announcements?studentId=${user.id}`);
+        const announcementsData = await announcementsRes.json();
+
         if (assignmentsData.success) {
           setAssignments(assignmentsData.assignments);
         }
@@ -42,8 +52,16 @@ export default function StreamSelection({ streams, onSelect, user }) {
           );
           setCompletedAssignmentIds(completedIds);
         }
+
+        if (batchesData.success) {
+          setBatches(batchesData.batches);
+        }
+
+        if (announcementsData.success) {
+          setAnnouncements(announcementsData.announcements);
+        }
       } catch (err) {
-        console.error('Error fetching assignments/results:', err);
+        console.error('Error fetching dashboard data:', err);
       } finally {
         setLoading(false);
       }
@@ -82,9 +100,8 @@ export default function StreamSelection({ streams, onSelect, user }) {
     onSelect(streamForExam);
   };
 
-  return (
-    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      
+  const renderMainContent = () => (
+    <>
       {/* Assigned Exams / Assignments Section */}
       {user && !user.isGuest && assignments.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -247,6 +264,128 @@ export default function StreamSelection({ streams, onSelect, user }) {
           ))}
         </div>
       </div>
+    </>
+  );
+
+  if (user && !user.isGuest) {
+    return (
+      <div className="student-dashboard-layout fade-in">
+        {/* Left Column: Exams & Streams */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          {renderMainContent()}
+        </div>
+
+        {/* Right Column: Sidebar (Batches & Notices) */}
+        <div className="sidebar-container">
+          {/* My Batches Card */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+              <Users size={20} color="var(--primary)" />
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: 0 }}>My Batches</h3>
+            </div>
+            
+            {batches.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', margin: '1rem 0' }}>
+                You have not joined any batches yet.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {batches.map(batch => (
+                  <div 
+                    key={batch._id} 
+                    style={{ 
+                      padding: '0.75rem 1rem', 
+                      background: 'var(--bg)', 
+                      border: '1px solid var(--border)', 
+                      borderRadius: '0.375rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '0.95rem', color: 'var(--text)' }}>
+                        {batch.name}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        Teacher: {batch.teacherName}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--primary)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
+                      Active
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Notice Board Card */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+              <Megaphone size={20} color="var(--warning)" />
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: 0 }}>Notice Board</h3>
+            </div>
+            
+            {announcements.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', margin: '1rem 0' }}>
+                No announcements or notices.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '400px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                {announcements.map(ann => {
+                  const isGeneral = !ann.batchId;
+                  return (
+                    <div key={ann._id} className="notice-item" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                        <h4 style={{ fontSize: '0.95rem', fontWeight: 'bold', margin: 0, color: 'var(--text)' }}>
+                          {ann.title}
+                        </h4>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                          {new Date(ann.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span style={{ 
+                          fontSize: '0.7rem', 
+                          padding: '0.1rem 0.35rem', 
+                          borderRadius: '3px', 
+                          fontWeight: '600',
+                          background: isGeneral ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)', 
+                          color: isGeneral ? '#10b981' : 'var(--warning)',
+                          border: isGeneral ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(245, 158, 11, 0.2)'
+                        }}>
+                          {isGeneral ? 'General Notice' : ann.batchId?.name || 'Batch Notice'}
+                        </span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          by {ann.createdBy || 'Faculty'}
+                        </span>
+                      </div>
+
+                      <p style={{ 
+                        fontSize: '0.85rem', 
+                        color: 'var(--text-muted)', 
+                        margin: '0.25rem 0 0 0', 
+                        whiteSpace: 'pre-wrap', 
+                        lineHeight: '1.4' 
+                      }}>
+                        {ann.content}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      {renderMainContent()}
     </div>
   );
 }
