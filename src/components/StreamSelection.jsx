@@ -130,15 +130,16 @@ export default function StreamSelection({ streams, onSelect, user }) {
               if ('Notification' in window && Notification.permission === 'granted') {
                 newAnns.forEach(a => {
                   new Notification('New Announcement', {
-          if (!isFirst && prevAnnouncementsRef.current) {
-            if (announcementsData.announcements.length > prevAnnouncementsRef.current.length) {
-              const newAnnouncement = announcementsData.announcements[0];
-              triggerOSNotification('New Announcement', newAnnouncement.title || 'You have a new notice.');
-              setDashboardNotification({ type: 'info', message: `New Notice: ${newAnnouncement.title || 'Check the notice board.'}` });
+                    body: a.title || a.message || 'You have a new notice.',
+                    icon: '/favicon.ico'
+                  });
+                });
+              }
+              setDashboardNotification({ type: 'info', message: `New Notice: ${newAnns[0].title || 'Check the notice board.'}` });
               setTimeout(() => setDashboardNotification(null), 5000);
             }
           }
-          prevAnnouncementsRef.current = announcementsData.announcements;
+          prevAnnouncementsRef.current = new Set(announcementsData.announcements.map(a => a._id));
         }
 
         setResources(allResources);
