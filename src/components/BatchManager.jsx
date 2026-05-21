@@ -1,11 +1,22 @@
 import { useState, useEffect } from 'react';
-import { Users, Plus, Trash2, UserPlus, Loader2, BookOpen } from 'lucide-react';
+import { Users, Plus, Trash2, UserPlus, Loader2, BookOpen, Link } from 'lucide-react';
 
 export default function BatchManager({ user }) {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newBatchName, setNewBatchName] = useState('');
   const [studentInputs, setStudentInputs] = useState({}); // { batchId: studentIdString }
+  const [copiedId, setCopiedId] = useState(null);
+
+  const handleCopyLink = (batchId) => {
+    const link = `${window.location.origin}/?joinBatch=${batchId}`;
+    navigator.clipboard.writeText(link)
+      .then(() => {
+        setCopiedId(batchId);
+        setTimeout(() => setCopiedId(null), 2000);
+      })
+      .catch(err => console.error('Failed to copy link:', err));
+  };
 
   const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
 
@@ -178,13 +189,22 @@ export default function BatchManager({ user }) {
                     ID: {batch._id} | {batch.students.length} students enrolled
                   </span>
                 </div>
-                <button
-                  className="btn btn-outline"
-                  onClick={() => handleDeleteBatch(batch._id)}
-                  style={{ color: 'var(--danger)', borderColor: 'var(--border)', padding: '0.4rem 0.8rem' }}
-                >
-                  <Trash2 size={16} /> Delete Batch
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => handleCopyLink(batch._id)}
+                    style={{ color: 'var(--warning)', borderColor: 'var(--warning)', padding: '0.4rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                  >
+                    <Link size={14} /> {copiedId === batch._id ? 'Copied!' : 'Share Join Link'}
+                  </button>
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => handleDeleteBatch(batch._id)}
+                    style={{ color: 'var(--danger)', borderColor: 'var(--border)', padding: '0.4rem 0.8rem' }}
+                  >
+                    <Trash2 size={16} /> Delete Batch
+                  </button>
+                </div>
               </div>
 
               {/* Roster & Add Student */}

@@ -449,6 +449,37 @@ app.delete('/api/teacher/batches/:id', async (req, res) => {
   }
 });
 
+app.get('/api/teacher/batches/:id', async (req, res) => {
+  try {
+    const batch = await Batch.findById(req.params.id);
+    if (!batch) return res.status(404).json({ success: false, error: 'Batch not found' });
+    res.json({ success: true, batch });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/teacher/batches/join', async (req, res) => {
+  try {
+    const { batchId, studentId } = req.body;
+    if (!batchId || !studentId) {
+      return res.status(400).json({ success: false, error: 'Missing batchId or studentId' });
+    }
+    const batch = await Batch.findById(batchId);
+    if (!batch) {
+      return res.status(404).json({ success: false, error: 'Batch not found' });
+    }
+    if (batch.students.includes(studentId)) {
+      return res.json({ success: true, alreadyJoined: true, batch });
+    }
+    batch.students.push(studentId);
+    await batch.save();
+    res.json({ success: true, alreadyJoined: false, batch });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 2. Assignments Management
 app.get('/api/teacher/assignments', async (req, res) => {
   try {
