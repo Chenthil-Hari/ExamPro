@@ -1,6 +1,6 @@
 import { API_URL } from '../config';
-import { useState, useEffect } from 'react';
-import { BookOpen, Clock, BarChart, Calendar, AlertCircle, FileText, CheckCircle, ArrowRight, Users, Megaphone } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { BookOpen, Clock, BarChart, Calendar, AlertCircle, FileText, CheckCircle, ArrowRight, Users, Megaphone, MessageSquare, Send, X, Loader2 } from 'lucide-react';
 
 export default function StreamSelection({ streams, onSelect, user }) {
   const [assignments, setAssignments] = useState([]);
@@ -9,6 +9,13 @@ export default function StreamSelection({ streams, onSelect, user }) {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(new Date());
+
+  // DM states for student
+  const [selectedTeacher, setSelectedTeacher] = useState(null);
+  const [dmMessages, setDmMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [loadingDms, setLoadingDms] = useState(false);
+  const chatEndRef = useRef(null);
 
   const apiUrl = API_URL;
 
@@ -21,9 +28,13 @@ export default function StreamSelection({ streams, onSelect, user }) {
   useEffect(() => {
     if (!user || user.isGuest) return;
 
+    let isFirst = true;
+
     const fetchData = async () => {
       try {
-        setLoading(true);
+        if (isFirst) {
+          setLoading(true);
+        }
         // Fetch assignments
         const assignmentsRes = await fetch(`${apiUrl}/teacher/assignments?studentId=${user.id}`);
         const assignmentsData = await assignmentsRes.json();
@@ -63,12 +74,102 @@ export default function StreamSelection({ streams, onSelect, user }) {
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
       } finally {
-        setLoading(false);
+        if (isFirst) {
+          setLoading(false);
+          isFirst = false;
+        }
       }
     };
 
     fetchData();
+
+    // Background polling every 5 seconds for batches, assignments, and announcements
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
   }, [user, apiUrl]);
+
+  // Fetch and poll messages
+  const fetchDMs = async () => {
+    if (!selectedTeacher || !user) return;
+    try {
+      const res = await fetch(`${apiUrl}/messages?userId=${user.id}`);
+      const data = await res.json();
+      if (data.success) {
+        // Filter messages between user.id and selectedTeacher.id
+        const chatLog = data.messages.filter(m => 
+          (m.senderId === user.id && m.receiverId === selectedTeacher.id) ||
+          (m.senderId === selectedTeacher.id && m.receiverId === user.id)
+        );
+        setDmMessages(chatLog);
+      }
+    } catch (err) {
+      console.error('Error fetching DMs:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedTeacher) {
+      setDmMessages([]);
+      return;
+    }
+    
+    // Fetch initially with loading spinner
+    const initialFetch = async () => {
+      setLoadingDms(true);
+      await fetchDMs();
+      setLoadingDms(false);
+    };
+    initialFetch();
+
+    // Poll every 3 seconds
+    const interval = setInterval(fetchDMs, 3000);
+    return () => clearInterval(interval);
+  }, [selectedTeacher, user]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [dmMessages]);
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !selectedTeacher || !user) return;
+
+    const payload = {
+      senderId: user.id,
+      receiverId: selectedTeacher.id,
+      content: chatInput.trim()
+    };
+
+    // Optimistic UI update
+    const tempMsg = {
+      _id: Date.now().toString(),
+      senderId: user.id,
+      receiverId: selectedTeacher.id,
+      content: chatInput.trim(),
+      createdAt: new Date().toISOString()
+    };
+    setDmMessages(prev => [...prev, tempMsg]);
+    setChatInput('');
+
+    try {
+      const res = await fetch(`${apiUrl}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!data.success) {
+        alert('Failed to send message');
+      } else {
+        // Fetch to sync with database ID
+        fetchDMs();
+      }
+    } catch (err) {
+      console.error('Error sending message:', err);
+      alert('Error sending message');
+    }
+  };
 
   const formatDateTime = (dateStr) => {
     return new Date(dateStr).toLocaleString(undefined, {
@@ -268,14 +369,27 @@ export default function StreamSelection({ streams, onSelect, user }) {
   );
 
   if (user && !user.isGuest) {
+    // Derive unique teachers from batches
+    const uniqueTeachers = [];
+    const seenTeacherIds = new Set();
+    batches.forEach(batch => {
+      if (batch.teacherId && !seenTeacherIds.has(batch.teacherId)) {
+        seenTeacherIds.add(batch.teacherId);
+        uniqueTeachers.push({
+          id: batch.teacherId,
+          name: batch.teacherName || 'Unknown Faculty'
+        });
+      }
+    });
+
     return (
-      <div className="student-dashboard-layout fade-in">
+      <div className="student-dashboard-layout fade-in" style={{ position: 'relative' }}>
         {/* Left Column: Exams & Streams */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           {renderMainContent()}
         </div>
 
-        {/* Right Column: Sidebar (Batches & Notices) */}
+        {/* Right Column: Sidebar (Batches, DMs & Notices) */}
         <div className="sidebar-container">
           {/* My Batches Card */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.5rem' }}>
@@ -315,6 +429,56 @@ export default function StreamSelection({ streams, onSelect, user }) {
                       Active
                     </span>
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Direct Messages Card */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
+              <MessageSquare size={20} color="var(--primary)" />
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: 0 }}>Direct Messages</h3>
+            </div>
+            
+            {uniqueTeachers.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', margin: '1rem 0' }}>
+                Join a batch to message your faculty.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {uniqueTeachers.map(teacher => (
+                  <button 
+                    key={teacher.id} 
+                    onClick={() => setSelectedTeacher(teacher)}
+                    style={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.75rem 1rem', 
+                      background: selectedTeacher?.id === teacher.id ? 'rgba(29, 78, 216, 0.08)' : 'var(--bg)', 
+                      border: selectedTeacher?.id === teacher.id ? '1px solid var(--primary)' : '1px solid var(--border)', 
+                      borderRadius: '0.375rem',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      width: '100%',
+                      color: 'var(--text)',
+                      transition: 'all 0.2s',
+                      outline: 'none'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '0.95rem' }}>
+                        {teacher.name}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        {teacher.id}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <MessageSquare size={14} /> Chat
+                    </span>
+                  </button>
                 ))}
               </div>
             )}
@@ -379,6 +543,176 @@ export default function StreamSelection({ streams, onSelect, user }) {
             )}
           </div>
         </div>
+
+        {/* Floating Chat Overlay */}
+        {selectedTeacher && (
+          <div 
+            className="fade-in"
+            style={{
+              position: 'fixed',
+              bottom: '2rem',
+              right: '2rem',
+              width: '360px',
+              height: '460px',
+              backgroundColor: 'rgba(255, 255, 255, 0.85)',
+              backdropFilter: 'blur(16px)',
+              webkitBackdropFilter: 'blur(16px)',
+              border: '1px solid var(--border)',
+              borderRadius: '1rem',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              display: 'flex',
+              flexDirection: 'column',
+              zIndex: 9999,
+              overflow: 'hidden'
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              padding: '1rem 1.25rem',
+              background: 'linear-gradient(135deg, var(--primary) 0%, #1e40af 100%)',
+              color: 'white',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e' }}></div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 'bold' }}>{selectedTeacher.name}</h4>
+                  <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>Faculty Portal</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedTeacher(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0.25rem',
+                  borderRadius: '50%',
+                  opacity: 0.8,
+                  transition: 'opacity 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.opacity = '1'}
+                onMouseLeave={(e) => e.target.style.opacity = '0.8'}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Messages Body */}
+            <div style={{
+              flex: 1,
+              padding: '1.25rem',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+              background: 'rgba(248, 250, 252, 0.5)'
+            }}>
+              {loadingDms ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                  <Loader2 className="animate-spin" size={24} color="var(--primary)" />
+                </div>
+              ) : dmMessages.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)', gap: '0.5rem', textAlign: 'center', padding: '1rem' }}>
+                  <MessageSquare size={32} style={{ opacity: 0.5 }} />
+                  <p style={{ fontSize: '0.85rem' }}>No messages yet. Send a message to start the conversation!</p>
+                </div>
+              ) : (
+                dmMessages.map(msg => {
+                  const isMe = msg.senderId === user.id;
+                  return (
+                    <div 
+                      key={msg._id}
+                      style={{
+                        alignSelf: isMe ? 'flex-end' : 'flex-start',
+                        maxWidth: '75%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: isMe ? 'flex-end' : 'flex-start',
+                        gap: '0.25rem'
+                      }}
+                    >
+                      <div style={{
+                        padding: '0.6rem 0.85rem',
+                        borderRadius: isMe ? '0.75rem 0.75rem 0 0.75rem' : '0.75rem 0.75rem 0.75rem 0',
+                        backgroundColor: isMe ? 'var(--primary)' : 'white',
+                        color: isMe ? 'white' : 'var(--text)',
+                        fontSize: '0.875rem',
+                        lineHeight: '1.4',
+                        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                        border: isMe ? 'none' : '1px solid var(--border)',
+                        wordBreak: 'break-word'
+                      }}>
+                        {msg.content}
+                      </div>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Footer Input */}
+            <form 
+              onSubmit={handleSendMessage}
+              style={{
+                padding: '0.75rem 1rem',
+                borderTop: '1px solid var(--border)',
+                display: 'flex',
+                gap: '0.5rem',
+                alignItems: 'center',
+                backgroundColor: 'white'
+              }}
+            >
+              <input 
+                type="text"
+                placeholder="Type your message..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '0.5rem 0.75rem',
+                  border: '1px solid var(--border)',
+                  borderRadius: '0.5rem',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  margin: 0
+                }}
+              />
+              <button 
+                type="submit"
+                disabled={!chatInput.trim()}
+                className="btn btn-primary"
+                style={{
+                  padding: '0.5rem',
+                  borderRadius: '0.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '36px',
+                  height: '36px',
+                  minWidth: 'auto',
+                  background: chatInput.trim() ? 'var(--primary)' : 'var(--border)',
+                  borderColor: chatInput.trim() ? 'var(--primary)' : 'var(--border)',
+                  color: chatInput.trim() ? 'white' : 'var(--text-muted)',
+                  cursor: chatInput.trim() ? 'pointer' : 'default'
+                }}
+              >
+                <Send size={16} />
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     );
   }

@@ -100,6 +100,54 @@ function App() {
     }
   };
 
+  const syncRoute = (path, currentUser) => {
+    const normUser = currentUser !== undefined ? currentUser : user;
+    if (path === '/teacher' || path === '/techer') {
+      if (normUser) {
+        if (normUser.isTeacher) {
+          setShowTeacher(true);
+          setShowProfile(false);
+          setShowAdmin(false);
+          setShowCommunity(false);
+        } else {
+          window.history.replaceState({}, '', '/student');
+          setShowTeacher(false);
+        }
+      } else {
+        setStarted(true);
+        setShowTeacher(true);
+      }
+    } else if (path === '/student') {
+      if (normUser && normUser.isTeacher) {
+        window.history.replaceState({}, '', '/techer');
+        setShowTeacher(true);
+        setShowProfile(false);
+        setShowAdmin(false);
+        setShowCommunity(false);
+      } else {
+        setShowTeacher(false);
+        setShowProfile(false);
+        setShowAdmin(false);
+        setShowCommunity(false);
+        if (!normUser) {
+          setStarted(true);
+        }
+      }
+    } else if (path === '/') {
+      if (normUser) {
+        if (normUser.isTeacher) {
+          window.history.replaceState({}, '', '/techer');
+          setShowTeacher(true);
+        } else {
+          window.history.replaceState({}, '', '/student');
+          setShowTeacher(false);
+        }
+      } else {
+        setStarted(false);
+      }
+    }
+  };
+
   // Restore session & Fetch dynamic streams list
   useEffect(() => {
     let currentUser = null;
@@ -108,9 +156,6 @@ function App() {
       const data = JSON.parse(savedSession);
       setUser(data.user);
       currentUser = data.user;
-      if (data.user?.isTeacher) {
-        setShowTeacher(true);
-      }
       if (data.stream) setStream(data.stream);
       if (data.examResult) setExamResult(data.examResult);
     }
@@ -129,6 +174,9 @@ function App() {
     };
     fetchStreams();
 
+    // Run routing check
+    syncRoute(window.location.pathname, currentUser);
+
     // Check for batch join URL param
     const urlParams = new URLSearchParams(window.location.search);
     const batchId = urlParams.get('joinBatch');
@@ -143,11 +191,27 @@ function App() {
     }
   }, []);
 
+  // Listen for browser popstate (back/forward buttons)
+  useEffect(() => {
+    const handlePopState = () => {
+      syncRoute(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [user]);
+
   const handleLogin = (userData) => {
     setUser(userData);
     localStorage.setItem('exam_session', JSON.stringify({ user: userData }));
     if (userData.isTeacher) {
+      window.history.pushState({}, '', '/teacher');
       setShowTeacher(true);
+      setShowProfile(false);
+      setShowAdmin(false);
+      setShowCommunity(false);
+    } else {
+      window.history.pushState({}, '', '/student');
+      setShowTeacher(false);
       setShowProfile(false);
       setShowAdmin(false);
       setShowCommunity(false);
@@ -188,6 +252,8 @@ function App() {
     setShowAdmin(false);
     setShowCommunity(false);
     setShowTeacher(false);
+    setStarted(false);
+    window.history.pushState({}, '', '/');
   };
 
   return (
@@ -198,7 +264,7 @@ function App() {
           <h1 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>ProExam</h1>
         </div>
         {!user && started && (
-          <button className="btn btn-outline" onClick={() => setStarted(false)}>
+          <button className="btn btn-outline" onClick={() => { setStarted(false); window.history.pushState({}, '', '/'); }}>
             Back to Home
           </button>
         )}
@@ -213,15 +279,40 @@ function App() {
                   </button>
                 )}
                 {user.isTeacher && (
-                  <button className="btn" style={{ background: 'linear-gradient(135deg, var(--warning) 0%, #d97706 100%)', color: 'white' }} onClick={() => { setShowTeacher(!showTeacher); setShowProfile(false); setShowAdmin(false); setShowCommunity(false); }}>
-                    {showTeacher ? 'Home' : 'Teacher Dashboard'}
+                  <button className="btn" style={{ background: 'linear-gradient(135deg, var(--warning) 0%, #d97706 100%)', color: 'white' }} onClick={() => { setShowTeacher(true); setShowProfile(false); setShowAdmin(false); setShowCommunity(false); window.history.pushState({}, '', '/techer'); }}>
+                    Teacher Dashboard
                   </button>
                 )}
-                <button className="btn btn-outline" onClick={() => { setShowCommunity(!showCommunity); setShowProfile(false); setShowAdmin(false); setShowTeacher(false); }}>
-                  {showCommunity ? 'Home' : 'Community Forum'}
+                <button className="btn btn-outline" onClick={() => {
+                  const nextCommunity = !showCommunity;
+                  setShowCommunity(nextCommunity);
+                  setShowProfile(false);
+                  setShowAdmin(false);
+                  if (nextCommunity) {
+                    setShowTeacher(false);
+                  } else {
+                    if (user.isTeacher) {
+                      setShowTeacher(true);
+                      window.history.pushState({}, '', '/techer');
+                    } else {
+                      setShowTeacher(false);
+                      window.history.pushState({}, '', '/student');
+                    }
+                  }
+                }}>
+                  {showCommunity ? (user.isTeacher ? 'Teacher Dashboard' : 'Home') : 'Community Forum'}
                 </button>
                 {!user.isTeacher && (
-                  <button className="btn btn-outline" onClick={() => { setShowProfile(!showProfile); setShowAdmin(false); setShowCommunity(false); setShowTeacher(false); }}>
+                  <button className="btn btn-outline" onClick={() => {
+                    const nextProfile = !showProfile;
+                    setShowProfile(nextProfile);
+                    setShowAdmin(false);
+                    setShowCommunity(false);
+                    setShowTeacher(false);
+                    if (!nextProfile) {
+                      window.history.pushState({}, '', '/student');
+                    }
+                  }}>
                     {showProfile ? 'Home' : 'Stats & Profile'}
                   </button>
                 )}
@@ -233,10 +324,19 @@ function App() {
       </header>
       
       <main>
-        {!user && !started && <LandingPage onGetStarted={() => setStarted(true)} />}
-        {!user && started && <Login onLogin={handleLogin} />}
+        {!user && !started && <LandingPage onGetStarted={() => { setStarted(true); window.history.pushState({}, '', '/student'); }} />}
+        {!user && started && (
+          <Login 
+            onLogin={handleLogin} 
+            isTeacherMode={showTeacher} 
+            setIsTeacherMode={(val) => {
+              setShowTeacher(val);
+              window.history.pushState({}, '', val ? '/techer' : '/student');
+            }} 
+          />
+        )}
         {user && showAdmin && <Admin user={user} streams={streamsList} onUpdateStreams={setStreamsList} onBack={() => setShowAdmin(false)} />}
-        {user && showTeacher && <TeacherDashboard user={user} streams={streamsList} onBack={() => setShowTeacher(false)} />}
+        {user && showTeacher && <TeacherDashboard user={user} streams={streamsList} onBack={handleLogout} />}
         {user && showProfile && <Profile user={user} streams={streamsList} onBack={() => setShowProfile(false)} />}
         {user && showCommunity && <CommunityForum user={user} />}
         {user && !stream && !examResult && !showProfile && !showAdmin && !showCommunity && !showTeacher && <StreamSelection streams={streamsList} onSelect={handleStreamSelect} user={user} />}

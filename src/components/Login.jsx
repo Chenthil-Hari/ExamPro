@@ -1,13 +1,18 @@
 import { API_URL } from '../config';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LogIn, UserCircle, GraduationCap, ArrowLeft, UserPlus, User } from 'lucide-react';
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, isTeacherMode, setIsTeacherMode }) {
   const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [isTeacherMode, setIsTeacherMode] = useState(false);
+
+  useEffect(() => {
+    setUsername('');
+    setPassword('');
+    setFullName('');
+  }, [isTeacherMode]);
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -89,9 +94,6 @@ export default function Login({ onLogin }) {
 
   const toggleTeacherMode = () => {
     setIsTeacherMode(!isTeacherMode);
-    setUsername('');
-    setPassword('');
-    setFullName('');
   };
 
   const switchAuthMode = (mode) => {
