@@ -10,6 +10,10 @@ export default function StreamSelection({ streams, onSelect, user }) {
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(new Date());
 
+  // Notification tracking refs
+  const prevAssignmentsRef = useRef(null);
+  const prevAnnouncementsRef = useRef(null);
+
   // DM states for student
   const [selectedTeacher, setSelectedTeacher] = useState(null);
   const [dmMessages, setDmMessages] = useState([]);
@@ -23,6 +27,12 @@ export default function StreamSelection({ streams, onSelect, user }) {
     // Update current time every 5 seconds to keep timing buttons accurate
     const timer = setInterval(() => setNow(new Date()), 5000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+      Notification.requestPermission();
+    }
   }, []);
 
   useEffect(() => {
@@ -53,6 +63,19 @@ export default function StreamSelection({ streams, onSelect, user }) {
 
         if (assignmentsData.success) {
           setAssignments(assignmentsData.assignments);
+          
+          if (prevAssignmentsRef.current !== null) {
+            const newAssignments = assignmentsData.assignments.filter(a => !prevAssignmentsRef.current.has(a._id));
+            if (newAssignments.length > 0 && 'Notification' in window && Notification.permission === 'granted') {
+              newAssignments.forEach(a => {
+                new Notification('New Exam/Assignment Scheduled', {
+                  body: `"${a.title}" has been scheduled.`,
+                  icon: '/favicon.ico'
+                });
+              });
+            }
+          }
+          prevAssignmentsRef.current = new Set(assignmentsData.assignments.map(a => a._id));
         }
 
         if (resultsData.success) {
@@ -70,6 +93,19 @@ export default function StreamSelection({ streams, onSelect, user }) {
 
         if (announcementsData.success) {
           setAnnouncements(announcementsData.announcements);
+
+          if (prevAnnouncementsRef.current !== null) {
+            const newAnns = announcementsData.announcements.filter(a => !prevAnnouncementsRef.current.has(a._id));
+            if (newAnns.length > 0 && 'Notification' in window && Notification.permission === 'granted') {
+              newAnns.forEach(a => {
+                new Notification('New Announcement', {
+                  body: a.title || a.message || 'You have a new notice.',
+                  icon: '/favicon.ico'
+                });
+              });
+            }
+          }
+          prevAnnouncementsRef.current = new Set(announcementsData.announcements.map(a => a._id));
         }
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
