@@ -487,6 +487,21 @@ app.get('/api/teacher/batches/:id', async (req, res) => {
   }
 });
 
+app.post('/api/teacher/batches/:id', async (req, res) => {
+  try {
+    const { name, teacherId, students } = req.body;
+    const batch = await Batch.findById(req.params.id);
+    if (!batch) return res.status(404).json({ success: false, error: 'Batch not found' });
+    if (name !== undefined) batch.name = name;
+    if (teacherId !== undefined) batch.teacherId = teacherId;
+    if (students !== undefined) batch.students = students;
+    await batch.save();
+    res.json({ success: true, batch });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post('/api/teacher/batches/join', async (req, res) => {
   try {
     const { batchId, studentId } = req.body;
@@ -666,6 +681,15 @@ app.get('/api/teacher/analytics/heatmap/:batchId', async (req, res) => {
     });
 
     res.json({ success: true, heatmap: heatmapData });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/teacher/analytics/student/:studentId', async (req, res) => {
+  try {
+    const results = await Result.find({ userId: req.params.studentId }).sort({ completedAt: -1 });
+    res.json({ success: true, results });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

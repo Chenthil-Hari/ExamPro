@@ -101,7 +101,7 @@ export default function FacultyAnalytics({ user }) {
 
   // Aggregated calculations
   const calculateClassAverages = () => {
-    if (!analytics || analytics.studentPerformance.length === 0) return { avgScore: 0, totalAttempts: 0, totalWarnings: 0 };
+    if (!analytics || !analytics.studentPerformance || analytics.studentPerformance.length === 0) return { avgScore: 0, totalAttempts: 0, totalWarnings: 0 };
     
     let totalScoreSum = 0;
     let attemptsCount = 0;
@@ -253,7 +253,7 @@ export default function FacultyAnalytics({ user }) {
           {/* Student Roster Table */}
           <div>
             <h4 style={{ fontWeight: 'bold', marginBottom: '1rem', fontSize: '1.1rem' }}>Student Progress Logs</h4>
-            {analytics?.studentPerformance.length === 0 ? (
+            {!analytics?.studentPerformance || analytics.studentPerformance.length === 0 ? (
               <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center' }}>No students enrolled in this batch.</p>
             ) : (
               <div style={{ overflowX: 'auto' }}>
@@ -268,7 +268,7 @@ export default function FacultyAnalytics({ user }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {analytics?.studentPerformance.map((student) => (
+                    {analytics?.studentPerformance?.map((student) => (
                       <tr key={student.userId} style={{ borderBottom: '1px solid var(--border)' }}>
                         <td style={{ padding: '0.75rem', fontWeight: '600' }}>{student.userId}</td>
                         <td style={{ padding: '0.75rem' }}>{student.attempts}</td>
