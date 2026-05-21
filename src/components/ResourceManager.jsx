@@ -293,7 +293,7 @@ export default function ResourceManager({ user }) {
                   </div>
                   
                   <a 
-                    href={res.type === 'link' ? res.url : `${apiUrl.replace('/api', '')}${res.url}`}
+                    href={res.url}
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="btn btn-outline"

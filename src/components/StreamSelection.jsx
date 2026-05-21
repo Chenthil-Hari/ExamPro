@@ -573,7 +573,7 @@ export default function StreamSelection({ streams, onSelect, user }) {
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{res.batchName}</div>
                     </div>
                     <a 
-                      href={res.type === 'link' ? res.url : `${apiUrl.replace('/api', '')}${res.url}`} 
+                      href={res.url}
                       target="_blank" 
                       rel="noopener noreferrer"
                       style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', borderRadius: '4px', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--primary)', fontWeight: 'bold' }}

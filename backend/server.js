@@ -30,28 +30,15 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-const fs = require('fs');
 const path = require('path');
-const multer = require('multer');
 
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
-  }
+// Cloudinary setup
+const cloudinary = require('cloudinary').v2;
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
-const upload = multer({ storage });
-
-app.use('/uploads', express.static(uploadDir));
 
 const PORT = process.env.PORT || 5000;
 
@@ -334,14 +321,20 @@ app.get('/api/community/questions', async (req, res) => {
   }
 });
 
-// 1b. Single file upload endpoint
-app.post('/api/upload', upload.single('file'), (req, res) => {
+// 1b. Single file upload endpoint (Cloudinary)
+app.post('/api/upload', async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    const { fileBase64, fileName } = req.body;
+    if (!fileBase64) {
+      return res.status(400).json({ success: false, error: 'No file data provided' });
     }
-    const relativePath = `/uploads/${req.file.filename}`;
-    res.json({ success: true, url: relativePath });
+    const ext = fileName ? path.extname(fileName).replace('.', '') : 'bin';
+    const uploadResult = await cloudinary.uploader.upload(fileBase64, {
+      folder: 'exampro/uploads',
+      resource_type: 'raw',
+      format: ext
+    });
+    res.json({ success: true, url: uploadResult.secure_url });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -629,28 +622,14 @@ app.get('/api/student/attendance', async (req, res) => {
   }
 });
 
-// 1d. Study Material & Resources
-app.post('/api/teacher/resources/upload', upload.single('file'), async (req, res) => {
-  try {
-    const { batchId, title, uploadedBy } = req.body;
-    if (!req.file || !batchId || !title || !uploadedBy) {
-      return res.status(400).json({ success: false, error: 'Missing fields or file' });
-    }
-    const resource = new Resource({
-      batchId,
-      title,
-      type: 'file',
-      url: `/uploads/${req.file.filename}`,
-      uploadedBy
-    });
-    await resource.save();
-    res.json({ success: true, resource });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+// 1d. Study Material & Resources (legacy multipart — redirected to Cloudinary base64 flow)
+app.post('/api/teacher/resources/upload', async (req, res) => {
+  // This route kept for backward compatibility; frontend uses /upload-base64 instead
+  res.status(400).json({ success: false, error: 'Use /api/teacher/resources/upload-base64 for file uploads.' });
 });
 
-// Upload endpoint using JSON Base64 — stores file in MongoDB (no filesystem needed)
+
+// Upload endpoint — uploads file to Cloudinary, stores only CDN URL in MongoDB
 app.post('/api/teacher/resources/upload-base64', async (req, res) => {
   try {
     const { batchId, title, uploadedBy, fileBase64, fileName } = req.body;
@@ -658,55 +637,34 @@ app.post('/api/teacher/resources/upload-base64', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing fields or file data' });
     }
 
-    // Parse data URL: "data:<mime>;base64,<data>"
-    const matches = fileBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    let base64Data = fileBase64;
-    let mimeType = 'application/octet-stream';
-    if (matches && matches.length === 3) {
-      mimeType = matches[1];
-      base64Data = matches[2];
-    }
+    // Parse MIME type from data URL
+    const matches = fileBase64.match(/^data:([A-Za-z-+\/]+);base64,/);
+    const mimeType = matches ? matches[1] : 'application/octet-stream';
+    const ext = path.extname(fileName).replace('.', '') || 'pdf';
 
-    // Store file data directly in MongoDB — avoids EROFS on read-only filesystems
+    // Upload to Cloudinary using the data URL directly
+    const uploadResult = await cloudinary.uploader.upload(fileBase64, {
+      folder: 'exampro/resources',
+      resource_type: 'raw',      // 'raw' supports PDFs, DOCX, PPT etc.
+      public_id: `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9]/g, '_')}`,
+      format: ext
+    });
+
     const resource = new Resource({
       batchId,
       title,
       type: 'file',
-      url: '', // will be set after save so we have the _id
+      url: uploadResult.secure_url,   // Cloudinary CDN URL
       uploadedBy,
-      fileData: base64Data,
       fileName,
-      mimeType
+      mimeType,
+      cloudinaryId: uploadResult.public_id
     });
-    await resource.save();
-
-    // Build a URL that points back to our serve endpoint
-    resource.url = `/api/resources/file/${resource._id}`;
     await resource.save();
 
     res.json({ success: true, resource });
   } catch (error) {
-    console.error('Base64 Upload Error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Serve a file stored in MongoDB by resource _id
-app.get('/api/resources/file/:id', async (req, res) => {
-  try {
-    const resource = await Resource.findById(req.params.id);
-    if (!resource || resource.type !== 'file' || !resource.fileData) {
-      return res.status(404).json({ success: false, error: 'File not found' });
-    }
-    const buffer = Buffer.from(resource.fileData, 'base64');
-    const mime = resource.mimeType || 'application/octet-stream';
-    const safeName = encodeURIComponent(resource.fileName || 'download');
-    res.set('Content-Type', mime);
-    res.set('Content-Disposition', `inline; filename="${safeName}"`);
-    res.set('Content-Length', buffer.length);
-    res.send(buffer);
-  } catch (error) {
-    console.error('File Serve Error:', error);
+    console.error('Cloudinary Upload Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
