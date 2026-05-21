@@ -8,6 +8,11 @@ const Result = require('./models/Result');
 const Question = require('./models/Question');
 const Stream = require('./models/Stream');
 const CommunityQuestion = require('./models/CommunityQuestion');
+const Batch = require('./models/Batch');
+const Assignment = require('./models/Assignment');
+const Announcement = require('./models/Announcement');
+const Message = require('./models/Message');
+const ActiveExam = require('./models/ActiveExam');
 
 const defaultStreams = [
   { id: 'neet', name: 'NEET', subjectCount: 3, totalQuestions: 5, duration: 10, difficulty: 'Medium', marking: { correct: 4, wrong: -1 } },
@@ -80,12 +85,25 @@ app.post('/api/login', async (req, res) => {
       }
     }
 
+    const isTeacherRole = id.startsWith('TCH_');
+
     let user = await User.findOne({ userId: id });
     if (!user) {
       const isAdmin = id === 'STU_hari@gmail.com' || id.toLowerCase().includes('admin');
-      user = new User({ userId: id, name, isGuest, isAdmin });
+      user = new User({ 
+        userId: id, 
+        name, 
+        isGuest, 
+        isAdmin, 
+        isTeacher: isTeacherRole,
+        password: password || undefined
+      });
       await user.save();
     } else {
+      // If it's a teacher, validate password
+      if (isTeacherRole && user.password && user.password !== password) {
+        return res.status(401).json({ success: false, error: 'Incorrect password for Teacher account' });
+      }
       // Ensure admin flag is active on existing record
       if (id === 'STU_hari@gmail.com' && !user.isAdmin) {
         user.isAdmin = true;
@@ -102,20 +120,28 @@ app.post('/api/login', async (req, res) => {
 // 2. Save Result
 app.post('/api/results', async (req, res) => {
   try {
-    const { userId, streamId, score, totalPossible, percentile, timeSpent } = req.body;
+    const { userId, streamId, score, totalPossible, percentile, timeSpent, assignmentId, ipAddress, deviceInfo, warningsCount, questionOrder, correctQuestionIds } = req.body;
     
-    // Do not save results for guest users if desired, but we will save them here
-    // since the frontend can handle the business logic of tracking.
     const result = new Result({
       userId,
       streamId,
       score,
       totalPossible,
       percentile,
-      timeSpent
+      timeSpent,
+      assignmentId: assignmentId || null,
+      ipAddress,
+      deviceInfo,
+      warningsCount: warningsCount || 0,
+      questionOrder: questionOrder || [],
+      correctQuestionIds: correctQuestionIds || []
     });
     
     await result.save();
+    
+    // Clean up active exam session on submission
+    await ActiveExam.findOneAndDelete({ userId });
+    
     res.json({ success: true, result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -137,7 +163,7 @@ app.get('/api/questions/:streamId', async (req, res) => {
   try {
     const { streamId } = req.params;
     const limit = parseInt(req.query.limit, 10) || 5;
-    const questions = await Question.find({ streamId });
+    const questions = await Question.find({ streamId, status: 'approved' });
     
     // Shuffle and pick requested limit of questions
     const shuffled = questions.sort(() => Math.random() - 0.5);
@@ -381,6 +407,375 @@ app.delete('/api/community/questions/:questionId', async (req, res) => {
     const q = await CommunityQuestion.findByIdAndDelete(questionId);
     if (!q) return res.status(404).json({ success: false, error: 'Question not found' });
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// --- FACULTY / TEACHER PORTAL ROUTES ---
+
+// 1. Batches Management
+app.get('/api/teacher/batches', async (req, res) => {
+  try {
+    const { teacherId } = req.query;
+    if (!teacherId) return res.status(400).json({ success: false, error: 'teacherId is required' });
+    const batches = await Batch.find({ teacherId }).sort({ createdAt: -1 });
+    res.json({ success: true, batches });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/teacher/batches', async (req, res) => {
+  try {
+    const { name, teacherId, students } = req.body;
+    if (!name || !teacherId) return res.status(400).json({ success: false, error: 'name and teacherId are required' });
+    const batch = new Batch({ name, teacherId, students: students || [] });
+    await batch.save();
+    res.json({ success: true, batch });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/teacher/batches/:id', async (req, res) => {
+  try {
+    const batch = await Batch.findByIdAndDelete(req.params.id);
+    if (!batch) return res.status(404).json({ success: false, error: 'Batch not found' });
+    await Assignment.deleteMany({ batchId: req.params.id });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 2. Assignments Management
+app.get('/api/teacher/assignments', async (req, res) => {
+  try {
+    const { teacherId, studentId } = req.query;
+    let query = {};
+    if (teacherId) {
+      query.createdBy = teacherId;
+    } else if (studentId) {
+      const studentBatches = await Batch.find({ students: studentId });
+      const batchIds = studentBatches.map(b => b._id);
+      query.batchId = { $in: batchIds };
+    }
+    const assignments = await Assignment.find(query).populate('batchId').populate('customQuestions').sort({ startTime: 1 });
+    res.json({ success: true, assignments });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/teacher/assignments', async (req, res) => {
+  try {
+    const { title, batchId, streamId, customQuestions, startTime, endTime, instructions, createdBy } = req.body;
+    if (!title || !batchId || !streamId || !startTime || !endTime || !createdBy) {
+      return res.status(400).json({ success: false, error: 'Missing required assignment fields' });
+    }
+    const assignment = new Assignment({
+      title, batchId, streamId, customQuestions: customQuestions || [],
+      startTime: new Date(startTime), endTime: new Date(endTime), instructions, createdBy
+    });
+    await assignment.save();
+    res.json({ success: true, assignment });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/teacher/assignments/:id', async (req, res) => {
+  try {
+    const assignment = await Assignment.findByIdAndDelete(req.params.id);
+    if (!assignment) return res.status(404).json({ success: false, error: 'Assignment not found' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3. Analytics & Performance Tracker
+app.get('/api/teacher/analytics/batch/:batchId', async (req, res) => {
+  try {
+    const batch = await Batch.findById(req.params.batchId);
+    if (!batch) return res.status(404).json({ success: false, error: 'Batch not found' });
+
+    const assignments = await Assignment.find({ batchId: batch._id });
+    const assignmentIds = assignments.map(a => a._id);
+
+    const results = await Result.find({
+      $or: [
+        { assignmentId: { $in: assignmentIds } },
+        { userId: { $in: batch.students }, assignmentId: null }
+      ]
+    }).sort({ completedAt: -1 });
+
+    const studentPerformance = {};
+    batch.students.forEach(s => {
+      studentPerformance[s] = { userId: s, attempts: 0, totalScore: 0, maxScore: 0, warningsCount: 0, resultsList: [] };
+    });
+
+    results.forEach(r => {
+      if (studentPerformance[r.userId]) {
+        const perf = studentPerformance[r.userId];
+        perf.attempts += 1;
+        perf.totalScore += r.score;
+        perf.warningsCount += (r.warningsCount || 0);
+        if (r.score > perf.maxScore) perf.maxScore = r.score;
+        perf.resultsList.push(r);
+      }
+    });
+
+    res.json({
+      success: true,
+      batchName: batch.name,
+      studentsCount: batch.students.length,
+      studentPerformance: Object.values(studentPerformance),
+      assignmentsCount: assignments.length
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/teacher/analytics/heatmap/:batchId', async (req, res) => {
+  try {
+    const batch = await Batch.findById(req.params.batchId);
+    if (!batch) return res.status(404).json({ success: false, error: 'Batch not found' });
+
+    const results = await Result.find({ userId: { $in: batch.students } });
+    const questionStats = {};
+
+    results.forEach(r => {
+      const qOrder = r.questionOrder || [];
+      const correctQ = r.correctQuestionIds || [];
+      
+      qOrder.forEach(qId => {
+        const qStr = qId.toString();
+        if (!questionStats[qStr]) {
+          questionStats[qStr] = { questionId: qStr, attempts: 0, correct: 0 };
+        }
+        questionStats[qStr].attempts += 1;
+        if (correctQ.some(cId => cId.toString() === qStr)) {
+          questionStats[qStr].correct += 1;
+        }
+      });
+    });
+
+    const questionIds = Object.keys(questionStats);
+    const questions = await Question.find({ _id: { $in: questionIds } });
+
+    const heatmapData = questions.map(q => {
+      const stats = questionStats[q._id.toString()] || { attempts: 0, correct: 0 };
+      const successRate = stats.attempts > 0 ? Math.round((stats.correct / stats.attempts) * 100) : 0;
+      return {
+        _id: q._id,
+        text: q.text,
+        subject: q.subject,
+        difficulty: q.difficulty || 'Medium',
+        tags: q.tags || [],
+        attempts: stats.attempts,
+        correct: stats.correct,
+        successRate
+      };
+    });
+
+    res.json({ success: true, heatmap: heatmapData });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4. Communication (Notice Board & DMs)
+app.get('/api/announcements', async (req, res) => {
+  try {
+    const { studentId } = req.query;
+    let query = {};
+    if (studentId) {
+      const studentBatches = await Batch.find({ students: studentId });
+      const batchIds = studentBatches.map(b => b._id);
+      query = { $or: [{ batchId: null }, { batchId: { $in: batchIds } }] };
+    }
+    const announcements = await Announcement.find(query).populate('batchId').sort({ createdAt: -1 });
+    res.json({ success: true, announcements });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/announcements', async (req, res) => {
+  try {
+    const { title, content, batchId, createdBy } = req.body;
+    if (!title || !content || !createdBy) {
+      return res.status(400).json({ success: false, error: 'Missing title, content, or createdBy' });
+    }
+    const ann = new Announcement({ title, content, batchId: batchId || null, createdBy });
+    await ann.save();
+    res.json({ success: true, announcement: ann });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/messages', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
+    const messages = await Message.find({
+      $or: [{ senderId: userId }, { receiverId: userId }]
+    }).sort({ createdAt: 1 });
+    res.json({ success: true, messages });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/messages', async (req, res) => {
+  try {
+    const { senderId, receiverId, content } = req.body;
+    if (!senderId || !receiverId || !content) {
+      return res.status(400).json({ success: false, error: 'senderId, receiverId, and content are required' });
+    }
+    const msg = new Message({ senderId, receiverId, content });
+    await msg.save();
+    res.json({ success: true, message: msg });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 5. Proctoring (Active Exams Monitor & Force Submit)
+app.post('/api/exams/active', async (req, res) => {
+  try {
+    const { userId, userName, streamId, assignmentId, deviceInfo, ipAddress } = req.body;
+    if (!userId || !userName || !streamId) {
+      return res.status(400).json({ success: false, error: 'Missing required parameters' });
+    }
+    const active = await ActiveExam.findOneAndUpdate(
+      { userId },
+      { 
+        userName, 
+        streamId, 
+        assignmentId: assignmentId || null, 
+        startedAt: new Date(), 
+        forceSubmit: false,
+        deviceInfo: deviceInfo || 'Unknown',
+        ipAddress: ipAddress || 'Unknown',
+        warnings: 0
+      },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, active });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/exams/active/warning', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'Missing userId' });
+    }
+    const active = await ActiveExam.findOneAndUpdate(
+      { userId },
+      { $inc: { warnings: 1 } },
+      { new: true }
+    );
+    if (!active) {
+      return res.status(404).json({ success: false, error: 'Active exam session not found' });
+    }
+    res.json({ success: true, warnings: active.warnings });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/exams/active/:userId', async (req, res) => {
+  try {
+    const active = await ActiveExam.findOneAndDelete({ userId: req.params.userId });
+    res.json({ success: true, found: !!active });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/teacher/active-exams', async (req, res) => {
+  try {
+    const active = await ActiveExam.find({}).sort({ startedAt: -1 });
+    res.json({ success: true, active });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/teacher/active-exams/force-submit/:userId', async (req, res) => {
+  try {
+    const active = await ActiveExam.findOneAndUpdate(
+      { userId: req.params.userId },
+      { forceSubmit: true },
+      { new: true }
+    );
+    if (!active) return res.status(404).json({ success: false, error: 'Active exam session not found' });
+    res.json({ success: true, active });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/exams/active/status/:userId', async (req, res) => {
+  try {
+    const active = await ActiveExam.findOne({ userId: req.params.userId });
+    if (!active) {
+      return res.json({ success: true, forceSubmit: false, active: false });
+    }
+    res.json({ success: true, forceSubmit: active.forceSubmit, active: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 6. Question Bank Approval Workflow & Proposal
+app.get('/api/teacher/questions/pending', async (req, res) => {
+  try {
+    const questions = await Question.find({ status: 'pending' }).sort({ streamId: 1, subject: 1 });
+    res.json({ success: true, questions });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/questions/propose', async (req, res) => {
+  try {
+    const { streamId, type, subject, text, options, correct, noNegative, difficulty, tags, createdBy } = req.body;
+    const isTeacherRole = createdBy && createdBy.startsWith('TCH_');
+    const q = new Question({
+      streamId, type, subject, text, options, correct, noNegative,
+      difficulty: difficulty || 'Medium', tags: tags || [],
+      status: isTeacherRole ? 'approved' : 'pending',
+      createdBy: createdBy || 'student',
+      version: 1
+    });
+    await q.save();
+    res.json({ success: true, question: q });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/teacher/questions/approve/:id', async (req, res) => {
+  try {
+    const { action, difficulty, tags } = req.body;
+    const status = action === 'approve' ? 'approved' : 'rejected';
+    
+    let updateFields = { status };
+    if (difficulty) updateFields.difficulty = difficulty;
+    if (tags) updateFields.tags = tags;
+    
+    const q = await Question.findByIdAndUpdate(req.params.id, updateFields, { new: true });
+    if (!q) return res.status(404).json({ success: false, error: 'Question not found' });
+    res.json({ success: true, question: q });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

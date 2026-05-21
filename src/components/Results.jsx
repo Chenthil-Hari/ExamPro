@@ -64,7 +64,13 @@ export default function Results({ result, user, onHome }) {
             score,
             totalPossible,
             percentile: parseFloat(percentile),
-            timeSpent
+            timeSpent,
+            assignmentId: result.assignmentId || null,
+            ipAddress: result.ipAddress || 'Unknown',
+            deviceInfo: result.deviceInfo || 'Unknown',
+            warningsCount: result.warningsCount || 0,
+            questionOrder: result.questionOrder || [],
+            correctQuestionIds: result.correctQuestionIds || []
           })
         }).catch(err => console.error('Failed to save result:', err));
       } else {
@@ -82,7 +88,7 @@ export default function Results({ result, user, onHome }) {
         localStorage.setItem('guest_results', JSON.stringify(guestResults));
       }
     }
-  }, [user, streamId, score, totalPossible, percentile, timeSpent]);
+  }, [user, streamId, score, totalPossible, percentile, timeSpent, result]);
 
   return (
     <div className="fade-in">

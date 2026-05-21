@@ -7,7 +7,8 @@ import Profile from './components/Profile';
 import LandingPage from './components/LandingPage';
 import Admin from './components/Admin';
 import CommunityForum from './components/CommunityForum';
-import { streams, questionBank } from './questions';
+import TeacherDashboard from './components/TeacherDashboard';
+import { streams } from './questions';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -15,6 +16,7 @@ function App() {
   const [examResult, setExamResult] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showTeacher, setShowTeacher] = useState(false);
   const [showCommunity, setShowCommunity] = useState(false);
   const [started, setStarted] = useState(false);
   const [streamsList, setStreamsList] = useState(streams);
@@ -25,6 +27,9 @@ function App() {
     if (savedSession) {
       const data = JSON.parse(savedSession);
       setUser(data.user);
+      if (data.user?.isTeacher) {
+        setShowTeacher(true);
+      }
       if (data.stream) setStream(data.stream);
       if (data.examResult) setExamResult(data.examResult);
     }
@@ -47,6 +52,12 @@ function App() {
   const handleLogin = (userData) => {
     setUser(userData);
     localStorage.setItem('exam_session', JSON.stringify({ user: userData }));
+    if (userData.isTeacher) {
+      setShowTeacher(true);
+      setShowProfile(false);
+      setShowAdmin(false);
+      setShowCommunity(false);
+    }
   };
 
   const handleStreamSelect = (selectedStream) => {
@@ -75,6 +86,7 @@ function App() {
     setShowProfile(false);
     setShowAdmin(false);
     setShowCommunity(false);
+    setShowTeacher(false);
   };
 
   return (
@@ -90,21 +102,28 @@ function App() {
           </button>
         )}
         {user && (
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ color: 'var(--text-muted)' }}>{user.name} ({user.id})</span>
             {!stream && !examResult && (
               <>
                 {user.isAdmin && (
-                  <button className="btn btn-primary" onClick={() => { setShowAdmin(!showAdmin); setShowProfile(false); setShowCommunity(false); }}>
+                  <button className="btn btn-primary" onClick={() => { setShowAdmin(!showAdmin); setShowProfile(false); setShowCommunity(false); setShowTeacher(false); }}>
                     {showAdmin ? 'Home' : 'Admin Panel'}
                   </button>
                 )}
-                <button className="btn btn-outline" onClick={() => { setShowCommunity(!showCommunity); setShowProfile(false); setShowAdmin(false); }}>
+                {user.isTeacher && (
+                  <button className="btn" style={{ background: 'linear-gradient(135deg, var(--warning) 0%, #d97706 100%)', color: 'white' }} onClick={() => { setShowTeacher(!showTeacher); setShowProfile(false); setShowAdmin(false); setShowCommunity(false); }}>
+                    {showTeacher ? 'Home' : 'Teacher Dashboard'}
+                  </button>
+                )}
+                <button className="btn btn-outline" onClick={() => { setShowCommunity(!showCommunity); setShowProfile(false); setShowAdmin(false); setShowTeacher(false); }}>
                   {showCommunity ? 'Home' : 'Community Forum'}
                 </button>
-                <button className="btn btn-outline" onClick={() => { setShowProfile(!showProfile); setShowAdmin(false); setShowCommunity(false); }}>
-                  {showProfile ? 'Home' : 'Stats & Profile'}
-                </button>
+                {!user.isTeacher && (
+                  <button className="btn btn-outline" onClick={() => { setShowProfile(!showProfile); setShowAdmin(false); setShowCommunity(false); setShowTeacher(false); }}>
+                    {showProfile ? 'Home' : 'Stats & Profile'}
+                  </button>
+                )}
                 <button className="btn btn-outline" onClick={handleLogout}>Logout</button>
               </>
             )}
@@ -116,9 +135,10 @@ function App() {
         {!user && !started && <LandingPage onGetStarted={() => setStarted(true)} />}
         {!user && started && <Login onLogin={handleLogin} />}
         {user && showAdmin && <Admin user={user} streams={streamsList} onUpdateStreams={setStreamsList} onBack={() => setShowAdmin(false)} />}
+        {user && showTeacher && <TeacherDashboard user={user} streams={streamsList} onBack={() => setShowTeacher(false)} />}
         {user && showProfile && <Profile user={user} streams={streamsList} onBack={() => setShowProfile(false)} />}
         {user && showCommunity && <CommunityForum user={user} />}
-        {user && !stream && !examResult && !showProfile && !showAdmin && !showCommunity && <StreamSelection streams={streamsList} onSelect={handleStreamSelect} />}
+        {user && !stream && !examResult && !showProfile && !showAdmin && !showCommunity && !showTeacher && <StreamSelection streams={streamsList} onSelect={handleStreamSelect} user={user} />}
         {user && stream && !examResult && (
           <Exam 
             stream={stream} 

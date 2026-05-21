@@ -15,8 +15,76 @@ export default function Exam({ stream, user, onComplete }) {
   const [bookmarkedIds, setBookmarkedIds] = useState([]);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [activeWarning, setActiveWarning] = useState(null);
+  const [ipAddress, setIpAddress] = useState('127.0.0.1');
 
   const handleSubmitRef = useRef(null);
+
+  // Fetch client IP on mount
+  useEffect(() => {
+    const fetchIp = async () => {
+      try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
+        if (data.ip) {
+          setIpAddress(data.ip);
+        }
+      } catch (err) {
+        console.warn('Could not fetch public IP, using default fallback:', err);
+      }
+    };
+    fetchIp();
+  }, []);
+
+  // Initialize active exam session in backend
+  useEffect(() => {
+    if (questions.length === 0 || !user || user.isGuest) return;
+
+    const initActiveExam = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+        await fetch(`${apiUrl}/exams/active`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            userName: user.name,
+            streamId: stream.id,
+            assignmentId: stream.assignmentId || null,
+            deviceInfo: navigator.userAgent,
+            ipAddress: ipAddress
+          })
+        });
+      } catch (err) {
+        console.error('Failed to log active exam session:', err);
+      }
+    };
+
+    initActiveExam();
+  }, [questions.length, user, stream.id, stream.assignmentId, ipAddress]);
+
+  // Poll active exam status (checks for forceSubmit)
+  useEffect(() => {
+    if (!user || user.isGuest || questions.length === 0) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+        const res = await fetch(`${apiUrl}/exams/active/status/${user.id}`);
+        const data = await res.json();
+        if (data.success && data.forceSubmit) {
+          clearInterval(pollInterval);
+          alert('This exam has been force submitted by the administrator/faculty.');
+          if (handleSubmitRef.current) {
+            handleSubmitRef.current();
+          }
+        }
+      } catch (err) {
+        console.error('Error polling active exam status:', err);
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [user, questions.length]);
 
   // Load bookmarks
   useEffect(() => {
@@ -65,16 +133,21 @@ export default function Exam({ stream, user, onComplete }) {
 
     const loadQuestions = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
-        const res = await fetch(`${apiUrl}/questions/${stream.id}?limit=${stream.totalQuestions || 5}`);
-        const data = await res.json();
-        
-        if (!data.success || !data.questions.length) {
-          throw new Error('Failed to fetch questions');
+        let loadedList = [];
+        if (stream.customQuestions && stream.customQuestions.length > 0) {
+          loadedList = stream.customQuestions;
+        } else {
+          const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+          const res = await fetch(`${apiUrl}/questions/${stream.id}?limit=${stream.totalQuestions || 5}`);
+          const data = await res.json();
+          if (!data.success || !data.questions.length) {
+            throw new Error('Failed to fetch questions');
+          }
+          loadedList = data.questions;
         }
 
         // Shuffle options & questions (per session)
-        const shuffled = [...data.questions].sort(() => Math.random() - 0.5).map(q => {
+        const shuffled = [...loadedList].sort(() => Math.random() - 0.5).map(q => {
           const newQ = { ...q };
           if (q.options) {
             const optionsWithCorrect = q.options.map((opt, idx) => ({
@@ -155,6 +228,14 @@ export default function Exam({ stream, user, onComplete }) {
       if (document.hidden) {
         setWarnings(w => {
           const newW = w + 1;
+          if (user && !user.isGuest) {
+            const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend/api' : 'http://localhost:5000/api');
+            fetch(`${apiUrl}/exams/active/warning`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: user.id })
+            }).catch(err => console.error('Failed to report warning:', err));
+          }
           setTimeout(() => {
             if (newW >= 3) {
               if (handleSubmitRef.current) handleSubmitRef.current();
@@ -190,7 +271,7 @@ export default function Exam({ stream, user, onComplete }) {
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
-  }, []);
+  }, [user]);
 
   const enterFullscreen = async () => {
     try {
@@ -285,14 +366,38 @@ export default function Exam({ stream, user, onComplete }) {
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(()=>{});
     }
+    // Clear exam state local storage
+    localStorage.removeItem('exam_state');
+
+    // Calculate correctQuestionIds
+    const correctQuestionIds = [];
+    questions.forEach((q, idx) => {
+      const ans = answers[idx] || [];
+      let isCorrect = false;
+      if (q.type === 'Integer') {
+        isCorrect = ans[0] === q.correct[0];
+      } else {
+        isCorrect = ans.length === q.correct.length && q.correct.every(c => ans.includes(c));
+      }
+      if (isCorrect) {
+        correctQuestionIds.push(q._id);
+      }
+    });
+
     onComplete({
       streamId: stream.id,
       questions,
       answers,
       timeSpent,
-      status
+      status,
+      assignmentId: stream.assignmentId || null,
+      ipAddress: ipAddress,
+      deviceInfo: navigator.userAgent,
+      warningsCount: warnings,
+      questionOrder: questions.map(q => q._id),
+      correctQuestionIds
     });
-  }, [answers, timeSpent, status, questions, stream.id, onComplete]);
+  }, [answers, timeSpent, status, questions, stream.id, warnings, ipAddress, onComplete]);
 
   handleSubmitRef.current = handleSubmit;
 
