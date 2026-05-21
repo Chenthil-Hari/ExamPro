@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { API_URL } from '../config';
-import { BookOpen, Link as LinkIcon, Upload, Trash2, FileText, ExternalLink, Loader2, Save } from 'lucide-react';
+import {
+  BookOpen, Link as LinkIcon, Upload, Trash2, FileText,
+  ExternalLink, Loader2, Pencil, X, Check, AlertTriangle
+} from 'lucide-react';
 
 export default function ResourceManager({ user }) {
   const [batches, setBatches] = useState([]);
@@ -8,17 +11,36 @@ export default function ResourceManager({ user }) {
   const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingResources, setLoadingResources] = useState(false);
-  
+
+  // Add form state
   const [title, setTitle] = useState('');
-  const [type, setType] = useState('link'); // 'link' or 'file'
+  const [type, setType] = useState('link');
   const [url, setUrl] = useState('');
   const [file, setFile] = useState(null);
-  
+
+  // Edit modal state
+  const [editingRes, setEditingRes] = useState(null); // resource being edited
+  const [editTitle, setEditTitle] = useState('');
+  const [editUrl, setEditUrl] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+
+  // Delete confirmation state
+  const [deletingId, setDeletingId] = useState(null); // resource id pending delete confirm
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
+
   const fileInputRef = useRef(null);
   const apiUrl = API_URL;
+
+  // Auto-dismiss success messages
+  useEffect(() => {
+    if (success) {
+      const t = setTimeout(() => setSuccess(''), 3500);
+      return () => clearTimeout(t);
+    }
+  }, [success]);
 
   // Fetch batches on mount
   useEffect(() => {
@@ -28,9 +50,7 @@ export default function ResourceManager({ user }) {
         const data = await res.json();
         if (data.success) {
           setBatches(data.batches);
-          if (data.batches.length > 0) {
-            setSelectedBatch(data.batches[0]._id);
-          }
+          if (data.batches.length > 0) setSelectedBatch(data.batches[0]._id);
         }
       } catch (err) {
         console.error('Failed to fetch batches:', err);
@@ -42,71 +62,53 @@ export default function ResourceManager({ user }) {
   // Fetch resources when batch changes
   useEffect(() => {
     if (!selectedBatch) return;
-    
     const fetchResources = async () => {
       try {
         setLoadingResources(true);
         const res = await fetch(`${apiUrl}/resources/${selectedBatch}`);
         const data = await res.json();
-        if (data.success) {
-          setResources(data.resources);
-        }
+        if (data.success) setResources(data.resources);
       } catch (err) {
         console.error('Failed to fetch resources:', err);
       } finally {
         setLoadingResources(false);
       }
     };
-    
     fetchResources();
   }, [selectedBatch, apiUrl]);
 
+  // ─── Upload File ────────────────────────────────────────────────────────────
   const handleUploadFile = async () => {
     if (!file || !title || !selectedBatch) {
       setError('Please provide a title, select a file, and choose a batch.');
       return;
     }
-    
     try {
       setLoading(true);
       setError('');
       setSuccess('');
-      
-      // Read file as Base64 to bypass strict proxy multipart limitations
       const reader = new FileReader();
       reader.onloadend = async () => {
         try {
           const fileBase64 = reader.result;
-          
           const res = await fetch(`${apiUrl}/teacher/resources/upload-base64`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              batchId: selectedBatch,
-              title,
+              batchId: selectedBatch, title,
               uploadedBy: user.userId || user.id,
-              fileBase64,
-              fileName: file.name
+              fileBase64, fileName: file.name
             })
           });
-          
           if (!res.ok) {
-            let errMsg = res.statusText;
-            try {
-              const errData = await res.json();
-              if (errData.error) errMsg = errData.error;
-            } catch (e) {
-              throw new Error(`Server returned ${res.status} ${res.statusText}.`);
-            }
-            throw new Error(errMsg);
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || res.statusText);
           }
-          
           const data = await res.json();
           if (data.success) {
             setSuccess('File uploaded successfully!');
             setResources([data.resource, ...resources]);
-            setTitle('');
-            setFile(null);
+            setTitle(''); setFile(null);
             if (fileInputRef.current) fileInputRef.current.value = '';
           } else {
             setError(data.error || 'Upload failed');
@@ -117,10 +119,7 @@ export default function ResourceManager({ user }) {
           setLoading(false);
         }
       };
-      reader.onerror = () => {
-        setError('Failed to read the file locally.');
-        setLoading(false);
-      };
+      reader.onerror = () => { setError('Failed to read the file locally.'); setLoading(false); };
       reader.readAsDataURL(file);
     } catch (err) {
       setError('Failed to process upload request.');
@@ -128,34 +127,24 @@ export default function ResourceManager({ user }) {
     }
   };
 
+  // ─── Share Link ─────────────────────────────────────────────────────────────
   const handleShareLink = async () => {
     if (!url || !title || !selectedBatch) {
       setError('Please provide a title, a URL, and choose a batch.');
       return;
     }
-    
     try {
-      setLoading(true);
-      setError('');
-      setSuccess('');
-      
+      setLoading(true); setError(''); setSuccess('');
       const res = await fetch(`${apiUrl}/teacher/resources/link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          batchId: selectedBatch,
-          title,
-          url,
-          uploadedBy: user.userId || user.id
-        })
+        body: JSON.stringify({ batchId: selectedBatch, title, url, uploadedBy: user.userId || user.id })
       });
-      
       const data = await res.json();
       if (data.success) {
         setSuccess('Link shared successfully!');
         setResources([data.resource, ...resources]);
-        setTitle('');
-        setUrl('');
+        setTitle(''); setUrl('');
       } else {
         setError(data.error);
       }
@@ -168,106 +157,254 @@ export default function ResourceManager({ user }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (type === 'file') {
-      handleUploadFile();
-    } else {
-      handleShareLink();
+    if (type === 'file') handleUploadFile();
+    else handleShareLink();
+  };
+
+  // ─── Delete ─────────────────────────────────────────────────────────────────
+  const handleDelete = async (id) => {
+    try {
+      setDeleteLoading(true);
+      const res = await fetch(`${apiUrl}/resources/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setResources(resources.filter(r => r._id !== id));
+        setSuccess('Resource deleted successfully.');
+      } else {
+        setError(data.error || 'Delete failed');
+      }
+    } catch (err) {
+      setError('Failed to delete resource. ' + err.message);
+    } finally {
+      setDeleteLoading(false);
+      setDeletingId(null);
     }
   };
 
+  // ─── Edit ────────────────────────────────────────────────────────────────────
+  const openEdit = (res) => {
+    setEditingRes(res);
+    setEditTitle(res.title);
+    setEditUrl(res.url);
+  };
+
+  const handleEditSave = async () => {
+    if (!editTitle.trim()) { setError('Title cannot be empty.'); return; }
+    try {
+      setEditLoading(true);
+      const body = { title: editTitle };
+      if (editingRes.type === 'link') body.url = editUrl;
+      const res = await fetch(`${apiUrl}/resources/${editingRes._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResources(resources.map(r => r._id === editingRes._id ? data.resource : r));
+        setSuccess('Resource updated successfully.');
+        setEditingRes(null);
+      } else {
+        setError(data.error || 'Update failed');
+      }
+    } catch (err) {
+      setError('Failed to update resource. ' + err.message);
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="card" style={{ padding: '2rem' }}>
+    <div className="card" style={{ padding: '2rem', position: 'relative' }}>
+
+      {/* Edit Modal */}
+      {editingRes && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: 'var(--card)', borderRadius: '1rem', padding: '2rem',
+            width: '100%', maxWidth: '480px', boxShadow: '0 25px 60px rgba(0,0,0,0.4)',
+            border: '1px solid var(--border)', animation: 'fadeSlideUp 0.2s ease'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Pencil size={20} color="var(--primary)" /> Edit Resource
+              </h3>
+              <button onClick={() => setEditingRes(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '0.25rem' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>TITLE</label>
+                <input
+                  className="input"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  placeholder="Resource title"
+                  autoFocus
+                />
+              </div>
+
+              {editingRes.type === 'link' && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>URL</label>
+                  <input
+                    className="input"
+                    type="url"
+                    value={editUrl}
+                    onChange={e => setEditUrl(e.target.value)}
+                    placeholder="https://..."
+                  />
+                </div>
+              )}
+
+              {editingRes.type === 'file' && (
+                <div style={{ padding: '0.75rem', background: 'var(--bg)', borderRadius: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FileText size={16} />
+                  {editingRes.fileName || 'Uploaded file'} — <em>file cannot be replaced, only title can be changed</em>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  onClick={handleEditSave}
+                  disabled={editLoading}
+                  className="btn btn-primary"
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+                >
+                  {editLoading ? <Loader2 size={16} className="spin" /> : <Check size={16} />}
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => setEditingRes(null)}
+                  className="btn btn-outline"
+                  style={{ flex: 1 }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingId && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: 'var(--card)', borderRadius: '1rem', padding: '2rem',
+            width: '100%', maxWidth: '400px', boxShadow: '0 25px 60px rgba(0,0,0,0.4)',
+            border: '1px solid #ef444433', textAlign: 'center', animation: 'fadeSlideUp 0.2s ease'
+          }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+              <AlertTriangle size={28} color="#ef4444" />
+            </div>
+            <h3 style={{ margin: '0 0 0.5rem' }}>Delete Resource?</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: '0 0 1.5rem' }}>
+              This will permanently remove the resource. If it's a file, it will also be deleted from Cloudinary.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={() => handleDelete(deletingId)}
+                disabled={deleteLoading}
+                style={{ flex: 1, padding: '0.65rem', borderRadius: '0.5rem', background: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+              >
+                {deleteLoading ? <Loader2 size={16} className="spin" /> : <Trash2 size={16} />}
+                Yes, Delete
+              </button>
+              <button
+                onClick={() => setDeletingId(null)}
+                className="btn btn-outline"
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
         <BookOpen size={28} color="var(--primary)" />
-        <h2 style={{ margin: 0 }}>Study Materials & Resources</h2>
+        <h2 style={{ margin: 0 }}>Study Materials &amp; Resources</h2>
       </div>
 
+      {error && (
+        <div style={{ color: '#ef4444', fontSize: '0.9rem', background: '#fef2f2', padding: '0.6rem 1rem', borderRadius: '0.5rem', marginBottom: '1rem', border: '1px solid #fecaca' }}>
+          {error}
+        </div>
+      )}
+      {success && (
+        <div style={{ color: '#10b981', fontSize: '0.9rem', background: '#ecfdf5', padding: '0.6rem 1rem', borderRadius: '0.5rem', marginBottom: '1rem', border: '1px solid #a7f3d0' }}>
+          {success}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem' }}>
-        
-        {/* Left Column: Upload Form */}
+
+        {/* Left: Upload Form */}
         <div>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'var(--bg)', padding: '1.5rem', borderRadius: '0.75rem', border: '1px solid var(--border)' }}>
             <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.1rem' }}>Add New Resource</h3>
-            
-            {error && <div style={{ color: '#ef4444', fontSize: '0.9rem', background: '#fef2f2', padding: '0.5rem', borderRadius: '0.375rem' }}>{error}</div>}
-            {success && <div style={{ color: '#10b981', fontSize: '0.9rem', background: '#ecfdf5', padding: '0.5rem', borderRadius: '0.375rem' }}>{success}</div>}
-            
+
             <div>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.9rem', fontWeight: 'bold' }}>Target Batch</label>
-              <select 
-                className="input" 
-                value={selectedBatch} 
-                onChange={(e) => setSelectedBatch(e.target.value)}
-                required
-              >
-                {batches.map(b => (
-                  <option key={b._id} value={b._id}>{b.name}</option>
-                ))}
+              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>TARGET BATCH</label>
+              <select className="input" value={selectedBatch} onChange={e => setSelectedBatch(e.target.value)} required>
+                {batches.map(b => <option key={b._id} value={b._id}>{b.name}</option>)}
               </select>
             </div>
-            
+
             <div>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.9rem', fontWeight: 'bold' }}>Resource Type</label>
+              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>RESOURCE TYPE</label>
               <div style={{ display: 'flex', gap: '1rem' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
                   <input type="radio" checked={type === 'link'} onChange={() => setType('link')} /> Link / URL
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
                   <input type="radio" checked={type === 'file'} onChange={() => setType('file')} /> File Upload
                 </label>
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.9rem', fontWeight: 'bold' }}>Title / Description</label>
-              <input 
-                type="text" 
-                className="input" 
-                placeholder="e.g. Chapter 4 Thermodynamics Notes" 
-                value={title} 
-                onChange={(e) => setTitle(e.target.value)}
-                required
-              />
+              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>TITLE / DESCRIPTION</label>
+              <input type="text" className="input" placeholder="e.g. Chapter 4 Thermodynamics Notes" value={title} onChange={e => setTitle(e.target.value)} required />
             </div>
 
             {type === 'link' ? (
               <div>
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.9rem', fontWeight: 'bold' }}>External URL (Zoom, YouTube, etc)</label>
-                <input 
-                  type="url" 
-                  className="input" 
-                  placeholder="https://..." 
-                  value={url} 
-                  onChange={(e) => setUrl(e.target.value)}
-                  required
-                />
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>EXTERNAL URL</label>
+                <input type="url" className="input" placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} required />
               </div>
             ) : (
               <div>
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.9rem', fontWeight: 'bold' }}>File (PDF, PPT, DOCX)</label>
-                <input 
-                  type="file" 
-                  className="input" 
-                  ref={fileInputRef}
-                  onChange={(e) => setFile(e.target.files[0])}
-                  required
-                />
+                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>FILE (PDF, PPT, DOCX)</label>
+                <input type="file" className="input" ref={fileInputRef} onChange={e => setFile(e.target.files[0])} required />
               </div>
             )}
 
             <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
               {loading ? <Loader2 className="spin" size={18} /> : type === 'link' ? <LinkIcon size={18} /> : <Upload size={18} />}
-              {type === 'link' ? 'Share Link' : 'Upload File'}
+              {loading ? 'Uploading…' : type === 'link' ? 'Share Link' : 'Upload File'}
             </button>
           </form>
         </div>
 
-        {/* Right Column: Resource List */}
+        {/* Right: Resource List */}
         <div>
-          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            Shared with {batches.find(b => b._id === selectedBatch)?.name || 'Batch'}
+          <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.1rem', fontWeight: '700' }}>
+            Shared with <span style={{ color: 'var(--primary)' }}>{batches.find(b => b._id === selectedBatch)?.name || 'Batch'}</span>
+            <span style={{ marginLeft: '0.5rem', fontSize: '0.85rem', fontWeight: '400', color: 'var(--text-muted)' }}>({resources.length} item{resources.length !== 1 ? 's' : ''})</span>
           </h3>
-          
+
           {loadingResources ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
               <Loader2 className="spin" size={24} color="var(--primary)" />
@@ -277,37 +414,87 @@ export default function ResourceManager({ user }) {
               No resources shared with this batch yet.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
               {resources.map(res => (
-                <div key={res._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '0.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ padding: '0.75rem', background: 'var(--bg-hover)', borderRadius: '0.5rem', color: 'var(--primary)' }}>
-                      {res.type === 'link' ? <LinkIcon size={20} /> : <FileText size={20} />}
+                <div
+                  key={res._id}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '0.9rem 1rem', background: 'var(--card)',
+                    border: '1px solid var(--border)', borderRadius: '0.6rem',
+                    transition: 'box-shadow 0.2s'
+                  }}
+                >
+                  {/* Icon + Info */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', minWidth: 0 }}>
+                    <div style={{ padding: '0.6rem', background: res.type === 'link' ? 'rgba(99,102,241,0.1)' : 'rgba(16,185,129,0.1)', borderRadius: '0.45rem', flexShrink: 0, color: res.type === 'link' ? '#6366f1' : '#10b981' }}>
+                      {res.type === 'link' ? <LinkIcon size={18} /> : <FileText size={18} />}
                     </div>
-                    <div>
-                      <h4 style={{ margin: 0, fontWeight: 'bold', fontSize: '1.05rem' }}>{res.title}</h4>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                        {new Date(res.createdAt).toLocaleDateString()} • {res.type.toUpperCase()}
-                      </span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: '600', fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {res.title}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                        {new Date(res.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        &nbsp;•&nbsp;
+                        <span style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>{res.type}</span>
+                        {res.fileName && <>&nbsp;•&nbsp;{res.fileName}</>}
+                      </div>
                     </div>
                   </div>
-                  
-                  <a 
-                    href={res.url}
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="btn btn-outline"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-                  >
-                    {res.type === 'link' ? <ExternalLink size={16} /> : <BookOpen size={16} />}
-                    {res.type === 'link' ? 'Open' : 'View File'}
-                  </a>
+
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0, marginLeft: '0.75rem' }}>
+                    {/* View / Open */}
+                    <a
+                      href={res.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-outline"
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.75rem', fontSize: '0.82rem' }}
+                    >
+                      {res.type === 'link' ? <ExternalLink size={14} /> : <BookOpen size={14} />}
+                      {res.type === 'link' ? 'Open' : 'View'}
+                    </a>
+
+                    {/* Edit */}
+                    <button
+                      onClick={() => openEdit(res)}
+                      title="Edit"
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        width: '34px', height: '34px', borderRadius: '0.45rem',
+                        background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)',
+                        color: '#6366f1', cursor: 'pointer', transition: 'all 0.15s'
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.18)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.08)'; }}
+                    >
+                      <Pencil size={15} />
+                    </button>
+
+                    {/* Delete */}
+                    <button
+                      onClick={() => setDeletingId(res._id)}
+                      title="Delete"
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        width: '34px', height: '34px', borderRadius: '0.45rem',
+                        background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+                        color: '#ef4444', cursor: 'pointer', transition: 'all 0.15s'
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.18)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-        
+
       </div>
     </div>
   );

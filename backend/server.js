@@ -698,6 +698,47 @@ app.get('/api/resources/:batchId', async (req, res) => {
   }
 });
 
+// Delete a resource (also removes from Cloudinary if it's a file)
+app.delete('/api/resources/:id', async (req, res) => {
+  try {
+    const resource = await Resource.findById(req.params.id);
+    if (!resource) return res.status(404).json({ success: false, error: 'Resource not found' });
+
+    // If it was uploaded to Cloudinary, delete it there too
+    if (resource.cloudinaryId) {
+      try {
+        await cloudinary.uploader.destroy(resource.cloudinaryId, { resource_type: 'raw' });
+      } catch (cloudErr) {
+        console.warn('Cloudinary delete warning:', cloudErr.message);
+      }
+    }
+
+    await Resource.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Edit a resource title (and URL for links)
+app.put('/api/resources/:id', async (req, res) => {
+  try {
+    const { title, url } = req.body;
+    if (!title) return res.status(400).json({ success: false, error: 'Title is required' });
+
+    const resource = await Resource.findById(req.params.id);
+    if (!resource) return res.status(404).json({ success: false, error: 'Resource not found' });
+
+    resource.title = title;
+    if (resource.type === 'link' && url) resource.url = url;
+    await resource.save();
+
+    res.json({ success: true, resource });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 2. Assignments Management
 app.get('/api/teacher/assignments', async (req, res) => {
   try {
