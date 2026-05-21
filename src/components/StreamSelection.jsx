@@ -9,6 +9,7 @@ export default function StreamSelection({ streams, onSelect, user }) {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(new Date());
+  const [dashboardNotification, setDashboardNotification] = useState(null);
 
   // Notification tracking refs
   const prevAssignmentsRef = useRef(null);
@@ -66,13 +67,17 @@ export default function StreamSelection({ streams, onSelect, user }) {
           
           if (prevAssignmentsRef.current !== null) {
             const newAssignments = assignmentsData.assignments.filter(a => !prevAssignmentsRef.current.has(a._id));
-            if (newAssignments.length > 0 && 'Notification' in window && Notification.permission === 'granted') {
-              newAssignments.forEach(a => {
-                new Notification('New Exam/Assignment Scheduled', {
-                  body: `"${a.title}" has been scheduled.`,
-                  icon: '/favicon.ico'
+            if (newAssignments.length > 0) {
+              if ('Notification' in window && Notification.permission === 'granted') {
+                newAssignments.forEach(a => {
+                  new Notification('New Exam/Assignment Scheduled', {
+                    body: `"${a.title}" has been scheduled.`,
+                    icon: '/favicon.ico'
+                  });
                 });
-              });
+              }
+              setDashboardNotification({ type: 'info', message: `New Exam Scheduled: "${newAssignments[0].title}"` });
+              setTimeout(() => setDashboardNotification(null), 5000);
             }
           }
           prevAssignmentsRef.current = new Set(assignmentsData.assignments.map(a => a._id));
@@ -96,13 +101,17 @@ export default function StreamSelection({ streams, onSelect, user }) {
 
           if (prevAnnouncementsRef.current !== null) {
             const newAnns = announcementsData.announcements.filter(a => !prevAnnouncementsRef.current.has(a._id));
-            if (newAnns.length > 0 && 'Notification' in window && Notification.permission === 'granted') {
-              newAnns.forEach(a => {
-                new Notification('New Announcement', {
-                  body: a.title || a.message || 'You have a new notice.',
-                  icon: '/favicon.ico'
+            if (newAnns.length > 0) {
+              if ('Notification' in window && Notification.permission === 'granted') {
+                newAnns.forEach(a => {
+                  new Notification('New Announcement', {
+                    body: a.title || a.message || 'You have a new notice.',
+                    icon: '/favicon.ico'
+                  });
                 });
-              });
+              }
+              setDashboardNotification({ type: 'info', message: `New Notice: ${newAnns[0].title || 'Check the notice board.'}` });
+              setTimeout(() => setDashboardNotification(null), 5000);
             }
           }
           prevAnnouncementsRef.current = new Set(announcementsData.announcements.map(a => a._id));
@@ -751,11 +760,38 @@ export default function StreamSelection({ streams, onSelect, user }) {
         )}
       </div>
     );
-  }
+  };
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       {renderMainContent()}
+      
+      {dashboardNotification && (
+        <div style={{
+          position: 'fixed',
+          top: '80px',
+          right: '20px',
+          backgroundColor: '#3b82f6',
+          color: 'white',
+          padding: '1rem 1.5rem',
+          borderRadius: '8px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          animation: 'slideInRight 0.3s ease-out'
+        }}>
+          <Megaphone size={20} />
+          <span style={{ fontWeight: '500' }}>{dashboardNotification.message}</span>
+          <button 
+            onClick={() => setDashboardNotification(null)}
+            style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '4px', marginLeft: '8px', display: 'flex', alignItems: 'center' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
