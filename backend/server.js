@@ -637,10 +637,12 @@ app.post('/api/teacher/resources/upload-base64', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing fields or file data' });
     }
 
-    // Parse base64 data to get just the raw string
-    const matches = fileBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    const mimeType = matches ? matches[1] : 'application/octet-stream';
-    const base64Data = matches ? matches[2] : fileBase64;
+    // Extract base64 data reliably without regex which can fail on huge strings or newlines
+    const base64Data = fileBase64.includes('base64,') ? fileBase64.split('base64,')[1] : fileBase64;
+    
+    // Attempt to parse mime type just for the database record
+    const mimeMatch = fileBase64.match(/^data:([a-zA-Z0-9-+\/]+);/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
     
     const ext = path.extname(fileName).replace('.', '') || 'pdf';
     const baseName = path.parse(fileName).name.replace(/[^a-zA-Z0-9]/g, '_');
