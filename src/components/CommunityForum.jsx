@@ -108,6 +108,10 @@ export default function CommunityForum({ user }) {
   // Convert uploaded path to full URL
   const getAttachmentUrl = (path) => {
     if (!path) return '';
+    // If it's already a full URL (like from Cloudinary), just return it
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
     const baseUrl = apiUrl.replace(/\/api$/, '');
     return `${baseUrl}${path}`;
   };
