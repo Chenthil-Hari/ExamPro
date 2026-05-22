@@ -48,25 +48,34 @@ export default function StreamSelection({ streams, onSelect, user }) {
         if (isFirst) {
           setLoading(true);
         }
-        // Fetch assignments
-        const assignmentsRes = await fetch(`${apiUrl}/teacher/assignments?studentId=${user.id}`);
-        const assignmentsData = await assignmentsRes.json();
-        
-        // Fetch student results to check completed assignments
-        const resultsRes = await fetch(`${apiUrl}/users/${user.id}/results`);
-        const resultsData = await resultsRes.json();
+        // Fetch all data concurrently to drastically improve loading speed
+        const [
+          assignmentsRes,
+          resultsRes,
+          batchesRes,
+          attRes,
+          announcementsRes
+        ] = await Promise.all([
+          fetch(`${apiUrl}/teacher/assignments?studentId=${user.id}`),
+          fetch(`${apiUrl}/users/${user.id}/results`),
+          fetch(`${apiUrl}/student/batches?studentId=${user.id}`),
+          fetch(`${apiUrl}/student/attendance?studentId=${user.id}`),
+          fetch(`${apiUrl}/announcements?studentId=${user.id}`)
+        ]);
 
-        // Fetch student batches
-        const batchesRes = await fetch(`${apiUrl}/student/batches?studentId=${user.id}`);
-        const batchesData = await batchesRes.json();
-
-        // Fetch attendance
-        const attRes = await fetch(`${apiUrl}/student/attendance?studentId=${user.id}`);
-        const attData = await attRes.json();
-
-        // Fetch announcements
-        const announcementsRes = await fetch(`${apiUrl}/announcements?studentId=${user.id}`);
-        const announcementsData = await announcementsRes.json();
+        const [
+          assignmentsData,
+          resultsData,
+          batchesData,
+          attData,
+          announcementsData
+        ] = await Promise.all([
+          assignmentsRes.json(),
+          resultsRes.json(),
+          batchesRes.json(),
+          attRes.json(),
+          announcementsRes.json()
+        ]);
 
         // Fetch resources for all batches
         let allResources = [];
