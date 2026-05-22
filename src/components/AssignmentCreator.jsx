@@ -176,10 +176,14 @@ export default function AssignmentCreator({ user, streams }) {
 
   return (
     <div>
-      <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
-        <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Calendar size={20} color="var(--warning)" /> Assignment Creator
-        </h3>
+      <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ padding: '0.75rem', background: 'rgba(245,158,11,0.1)', borderRadius: '0.5rem', color: 'var(--warning)' }}>
+          <Calendar size={24} />
+        </div>
+        <div>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>Assignment Creator</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0' }}>Schedule mock exams and quizzes for your batches</p>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '2rem', alignItems: 'start' }}>
@@ -349,7 +353,9 @@ export default function AssignmentCreator({ user, streams }) {
 
         {/* Scheduled List */}
         <div>
-          <h4 style={{ fontWeight: 'bold', marginBottom: '1.25rem' }}>Scheduled Assignments</h4>
+          <h4 style={{ fontWeight: 'bold', marginBottom: '1.25rem', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Clock size={18} color="var(--primary)" /> Scheduled Assignments
+          </h4>
           {assignments.length === 0 ? (
             <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', border: '1px dashed var(--border)', borderRadius: '0.5rem' }}>
               No scheduled exams found. Create one using the scheduler.
@@ -361,41 +367,51 @@ export default function AssignmentCreator({ user, streams }) {
                 const start = new Date(ass.startTime);
                 const end = new Date(ass.endTime);
                 let badgeText = 'Scheduled';
-                let badgeColor = 'var(--text-muted)';
+                let badgeBg = 'rgba(100,116,139,0.1)';
+                let badgeColor = '#64748b';
                 
                 if (now >= start && now <= end) {
                   badgeText = 'Ongoing';
-                  badgeColor = 'var(--status-answered)';
+                  badgeBg = 'rgba(16,185,129,0.1)';
+                  badgeColor = '#10b981';
                 } else if (now > end) {
                   badgeText = 'Completed';
-                  badgeColor = 'var(--text-muted)';
+                  badgeBg = 'rgba(239,68,68,0.1)';
+                  badgeColor = '#ef4444';
                 }
 
                 return (
-                  <div key={ass._id} className="card" style={{ border: '1px solid var(--border)', padding: '1.25rem' }}>
+                  <div key={ass._id} className="card" style={{ border: '1px solid var(--border)', padding: '1.25rem', borderLeft: `4px solid ${badgeColor}`, transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
                       <div>
-                        <h5 style={{ fontWeight: 'bold', fontSize: '1rem' }}>{ass.title}</h5>
-                        <span style={{ fontSize: '0.75rem', padding: '0.1rem 0.5rem', borderRadius: '999px', background: 'rgba(0,0,0,0.05)', color: badgeColor, border: `1px solid ${badgeColor}`, fontWeight: '600' }}>
+                        <h5 style={{ fontWeight: 'bold', fontSize: '1.05rem', margin: '0 0 0.5rem 0' }}>{ass.title}</h5>
+                        <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem', borderRadius: '1rem', background: badgeBg, color: badgeColor, fontWeight: '600' }}>
                           {badgeText}
                         </span>
                       </div>
                       <button
                         onClick={() => handleDeleteAssignment(ass._id)}
-                        style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer' }}
+                        style={{ background: 'rgba(239,68,68,0.1)', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0.5rem', borderRadius: '0.5rem' }}
+                        title="Cancel Exam"
                       >
                         <Trash2 size={16} />
                       </button>
                     </div>
 
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.5rem' }}>
-                      <div><strong>Batch:</strong> {ass.batchId?.name || 'Deleted Batch'}</div>
-                      <div><strong>Stream:</strong> {ass.streamId.toUpperCase()}</div>
-                      <div>
-                        <strong>Window:</strong> {start.toLocaleString()} - {end.toLocaleString()}
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '1rem', background: 'var(--bg)', padding: '0.75rem', borderRadius: '0.5rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><strong>Target Batch:</strong> <span>{ass.batchId?.name || 'Deleted Batch'}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><strong>Stream:</strong> <span style={{ textTransform: 'uppercase' }}>{ass.streamId}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <strong>Exam Window:</strong> 
+                        <span>
+                          {start.toLocaleDateString()} {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       </div>
-                      <div>
-                        <strong>Mode:</strong> {ass.customQuestions?.length > 0 ? `${ass.customQuestions.length} Custom Questions` : 'General Shuffled Set'}
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <strong>Question Set:</strong> 
+                        <span style={{ color: ass.customQuestions?.length > 0 ? 'var(--primary)' : 'inherit', fontWeight: '500' }}>
+                          {ass.customQuestions?.length > 0 ? `${ass.customQuestions.length} Custom Qs` : 'General Auto-Shuffled'}
+                        </span>
                       </div>
                     </div>
                   </div>

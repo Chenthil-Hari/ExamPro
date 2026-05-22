@@ -1,6 +1,7 @@
 import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
-import { BarChart2, Loader2, Award, AlertTriangle, HelpCircle, CheckCircle, ArrowLeft } from 'lucide-react';
+import { Loader2, Award, AlertTriangle, CheckCircle, ArrowLeft, TrendingUp } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 
 export default function FacultyAnalytics({ user }) {
   const [batches, setBatches] = useState([]);
@@ -248,6 +249,76 @@ export default function FacultyAnalytics({ user }) {
                 </h4>
               </div>
             </div>
+          </div>
+
+          {/* Premium Charts Section */}
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem', marginTop: '1rem' }}>
+            
+            {/* Student Scores Bar Chart */}
+            <div className="card" style={{ padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--border)', background: 'var(--card)' }}>
+              <h4 style={{ fontWeight: 'bold', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem' }}>
+                <TrendingUp size={18} color="var(--primary)" /> Top Scores Distribution
+              </h4>
+              <div style={{ height: 280 }}>
+                {analytics?.studentPerformance?.filter(s => s.attempts > 0).length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={analytics.studentPerformance.filter(s => s.attempts > 0)} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                      <XAxis dataKey="userId" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                      <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                        cursor={{ fill: 'rgba(99,102,241,0.05)' }}
+                      />
+                      <Bar dataKey="maxScore" name="Max Score" radius={[4, 4, 0, 0]}>
+                        {analytics.studentPerformance.filter(s => s.attempts > 0).map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#6366f1' : '#8b5cf6'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    Not enough data to display chart
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Participation Pie Chart */}
+            <div className="card" style={{ padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--border)', background: 'var(--card)' }}>
+              <h4 style={{ fontWeight: 'bold', marginBottom: '1rem', fontSize: '1.05rem' }}>Participation Rate</h4>
+              <div style={{ height: 280 }}>
+                {analytics?.studentPerformance?.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Attempted', value: analytics.studentPerformance.filter(s => s.attempts > 0).length },
+                          { name: 'Not Attempted', value: analytics.studentPerformance.filter(s => s.attempts === 0).length }
+                        ]}
+                        cx="50%" cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        <Cell fill="#10b981" />
+                        <Cell fill="#e2e8f0" />
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    No students found
+                  </div>
+                )}
+              </div>
+            </div>
+
           </div>
 
           {/* Student Roster Table */}

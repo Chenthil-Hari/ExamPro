@@ -138,19 +138,26 @@ export default function AttendanceManager({ user }) {
   }
 
   return (
-    <div className="card" style={{ padding: '2rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
-        <Calendar size={28} color="var(--primary)" />
-        <h2 style={{ margin: 0 }}>Attendance Tracking</h2>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ padding: '0.75rem', background: 'rgba(99,102,241,0.1)', borderRadius: '0.5rem', color: 'var(--primary)' }}>
+          <Calendar size={24} />
+        </div>
+        <div>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>Attendance Tracking</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0' }}>Mark daily roll calls and generate attendance reports</p>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+      <div className="card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', padding: '1.5rem', background: 'var(--card)', border: '1px solid var(--border)' }}>
         <div>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Select Batch</label>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.9rem', color: 'var(--text-muted)' }}>SELECT BATCH</label>
           <select 
             className="input" 
             value={selectedBatch || ''} 
             onChange={(e) => setSelectedBatch(e.target.value)}
+            style={{ padding: '0.75rem', borderRadius: '0.5rem' }}
           >
             <option value="">-- Choose Batch --</option>
             {batches.map(b => (
@@ -159,13 +166,14 @@ export default function AttendanceManager({ user }) {
           </select>
         </div>
         <div>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Date</label>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.9rem', color: 'var(--text-muted)' }}>ATTENDANCE DATE</label>
           <input 
             type="date" 
             className="input" 
             value={date} 
             max={new Date().toISOString().split('T')[0]}
             onChange={(e) => setDate(e.target.value)}
+            style={{ padding: '0.75rem', borderRadius: '0.5rem' }}
           />
         </div>
       </div>
@@ -190,15 +198,15 @@ export default function AttendanceManager({ user }) {
             <p style={{ color: 'var(--text-muted)' }}>No students enrolled in this batch.</p>
           ) : (
             <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h3 style={{ margin: 0 }}>Student Roster</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                <h4 style={{ fontWeight: 'bold', fontSize: '1.1rem', margin: 0 }}>Student Roster ({students.length})</h4>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button className="btn btn-outline" onClick={() => markAll('Present')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>Mark All Present</button>
-                  <button className="btn btn-outline" onClick={() => markAll('Absent')} style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>Mark All Absent</button>
+                  <button className="btn btn-outline" onClick={() => markAll('Present')} style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', color: '#10b981', borderColor: 'rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.05)' }}>Mark All Present</button>
+                  <button className="btn btn-outline" onClick={() => markAll('Absent')} style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)' }}>Mark All Absent</button>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '2rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
                 {students.map(s => {
                   const status = attendanceRecords[s.userId];
                   const isPresent = status === 'Present';
@@ -211,40 +219,37 @@ export default function AttendanceManager({ user }) {
                         justifyContent: 'space-between', 
                         alignItems: 'center',
                         padding: '1rem',
-                        border: '1px solid var(--border)',
-                        borderRadius: '0.5rem',
-                        background: 'var(--card)'
+                        border: isPresent ? '1px solid rgba(16,185,129,0.4)' : '1px solid rgba(239,68,68,0.4)',
+                        borderRadius: '0.75rem',
+                        background: isPresent ? 'rgba(16,185,129,0.03)' : 'rgba(239,68,68,0.03)',
+                        transition: 'all 0.2s',
+                        cursor: 'pointer'
                       }}
+                      onClick={() => toggleAttendance(s.userId)}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: 'var(--primary)' }}>
+                        <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: isPresent ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: isPresent ? '#10b981' : '#ef4444', fontSize: '1.2rem' }}>
                           {s.name.charAt(0)}
                         </div>
                         <div>
-                          <p style={{ fontWeight: 'bold', margin: 0 }}>{s.name}</p>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{s.userId}</span>
+                          <p style={{ fontWeight: 'bold', margin: 0, fontSize: '0.95rem' }}>{s.name}</p>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{s.userId}</span>
                         </div>
                       </div>
                       
-                      <button 
-                        onClick={() => toggleAttendance(s.userId)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem',
-                          padding: '0.5rem 1rem',
-                          borderRadius: '2rem',
-                          border: `1px solid ${isPresent ? '#10b981' : '#ef4444'}`,
-                          background: isPresent ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                          color: isPresent ? '#10b981' : '#ef4444',
-                          fontWeight: 'bold',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        {isPresent ? <CheckCircle size={18} /> : <XCircle size={18} />}
-                        {status}
-                      </button>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '32px', height: '32px',
+                        borderRadius: '50%',
+                        background: isPresent ? '#10b981' : '#ef4444',
+                        color: 'white',
+                        transition: 'transform 0.15s',
+                        transform: isPresent ? 'scale(1)' : 'scale(0.9)'
+                      }}>
+                        {isPresent ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                      </div>
                     </div>
                   );
                 })}

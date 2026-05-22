@@ -251,31 +251,37 @@ export default function TeacherCommunication({ user }) {
             </form>
           </div>
 
-          {/* Past notices list */}
+          {/* Announcement Feed */}
           <div>
-            <h4 style={{ fontWeight: 'bold', marginBottom: '1.25rem', fontSize: '1.05rem' }}>Notice Logs</h4>
+            <h4 style={{ fontWeight: 'bold', marginBottom: '1.25rem', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Bell size={18} color="var(--primary)" /> Recent Broadcasts
+            </h4>
             {loadingAnn ? (
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
                 <Loader2 className="animate-spin" size={24} color="var(--warning)" />
               </div>
             ) : announcements.length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center' }}>No announcements published yet.</p>
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', border: '1px dashed var(--border)', borderRadius: '0.5rem' }}>
+                No notices published yet.
+              </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {announcements.map(ann => (
-                  <div key={ann._id} className="card" style={{ border: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <h5 style={{ fontWeight: 'bold' }}>{ann.title}</h5>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                {announcements.map((ann) => (
+                  <div key={ann._id} className="card" style={{ padding: '1.25rem', background: 'var(--card)', border: '1px solid var(--border)', borderLeft: '4px solid var(--warning)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                      <h5 style={{ fontWeight: 'bold', fontSize: '1.05rem', margin: 0, color: 'var(--text)' }}>{ann.title}</h5>
+                      <span style={{ fontSize: '0.75rem', background: 'var(--bg)', padding: '0.2rem 0.5rem', borderRadius: '1rem', color: 'var(--text-muted)' }}>
                         {new Date(ann.createdAt).toLocaleDateString()}
                       </span>
                     </div>
-                    <span style={{ fontSize: '0.75rem', padding: '0.1rem 0.4rem', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-muted)' }}>
-                      Target: {ann.batchId?.name || 'All Batches'}
-                    </span>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.75rem', whiteSpace: 'pre-wrap' }}>
+                    <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
                       {ann.content}
                     </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--primary)', fontWeight: '500' }}>
+                      <div style={{ padding: '0.2rem 0.6rem', background: 'rgba(99,102,241,0.1)', borderRadius: '4px' }}>
+                        Target: {ann.batchId ? batches.find(b => b._id === ann.batchId)?.name || 'Batch' : 'All Students'}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -320,7 +326,7 @@ export default function TeacherCommunication({ user }) {
             )}
           </div>
 
-          {/* DM Conversation area */}
+          {/* Chat window */}
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--card)' }}>
             {selectedStudentId ? (
               <>
@@ -330,37 +336,34 @@ export default function TeacherCommunication({ user }) {
                 </div>
 
                 {/* Messages viewport */}
-                <div style={{ flex: 1, padding: '1.25rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ flex: 1, padding: '1.25rem', overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {loadingDms && dmMessages.length === 0 ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', padding: '1rem' }}>
-                      <Loader2 className="animate-spin" size={20} color="var(--warning)" />
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+                      <Loader2 className="animate-spin" size={24} color="var(--primary)" />
                     </div>
                   ) : dmMessages.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '2rem' }}>
-                      No messages exchanged yet. Start the conversation by sending a message below.
+                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: 'auto', marginBottom: 'auto' }}>
+                      No messages yet. Send a message to start the conversation!
                     </div>
                   ) : (
                     dmMessages.map((msg) => {
                       const isMe = msg.senderId === user.id;
                       return (
-                        <div
-                          key={msg._id}
-                          style={{
-                            alignSelf: isMe ? 'flex-end' : 'flex-start',
-                            maxWidth: '70%',
-                            background: isMe ? 'var(--warning)' : 'var(--bg)',
+                        <div key={msg._id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+                          <div style={{
+                            maxWidth: '75%', padding: '0.75rem 1rem', borderRadius: '1rem',
+                            background: isMe ? 'var(--primary)' : 'var(--card)',
                             color: isMe ? 'white' : 'var(--text)',
-                            padding: '0.6rem 0.9rem',
-                            borderRadius: '0.5rem',
-                            fontSize: '0.85rem',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                            position: 'relative'
-                          }}
-                        >
-                          <div style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.content}</div>
-                          <span style={{ display: 'block', textAlign: 'right', fontSize: '0.65rem', opacity: 0.7, marginTop: '0.25rem' }}>
+                            border: isMe ? 'none' : '1px solid var(--border)',
+                            borderBottomRightRadius: isMe ? 0 : '1rem',
+                            borderBottomLeftRadius: isMe ? '1rem' : 0,
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
+                          }}>
+                            <div style={{ fontSize: '0.95rem', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', padding: '0 0.25rem' }}>
                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                          </div>
                         </div>
                       );
                     })
@@ -368,27 +371,18 @@ export default function TeacherCommunication({ user }) {
                   <div ref={chatEndRef} />
                 </div>
 
-                {/* Send chat input */}
-                <form onSubmit={handleSendMessage} style={{ display: 'flex', borderTop: '1px solid var(--border)', padding: '0.75rem' }}>
+                {/* Input area */}
+                <form onSubmit={handleSendMessage} style={{ padding: '1rem', borderTop: '1px solid var(--border)', background: 'var(--card)', display: 'flex', gap: '0.5rem' }}>
                   <input
                     type="text"
-                    placeholder="Type message..."
+                    className="input"
+                    placeholder="Type a message..."
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    style={{ marginBottom: 0, border: 'none', background: 'transparent', flex: 1, outline: 'none', padding: '0.5rem' }}
+                    style={{ flex: 1, borderRadius: '2rem', paddingLeft: '1.25rem' }}
                   />
-                  <button
-                    type="submit"
-                    className="btn"
-                    style={{
-                      background: 'var(--warning)',
-                      color: 'white',
-                      padding: '0.5rem 1rem',
-                      borderRadius: '0.375rem',
-                      marginLeft: '0.5rem'
-                    }}
-                  >
-                    <Send size={16} />
+                  <button type="submit" className="btn btn-primary" disabled={!chatInput.trim()} style={{ borderRadius: '50%', width: '42px', height: '42px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Send size={18} />
                   </button>
                 </form>
               </>
