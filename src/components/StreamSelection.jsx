@@ -261,6 +261,20 @@ export default function StreamSelection({ streams, onSelect, user }) {
     });
   };
 
+  const generateGoogleCalendarUrl = (assignment) => {
+    const formatToGCalDate = (dateString) => {
+      const date = new Date(dateString);
+      return date.toISOString().replace(/-|:|\.\d\d\d/g, "");
+    };
+
+    const start = formatToGCalDate(assignment.startTime);
+    const end = formatToGCalDate(assignment.endTime);
+    const title = encodeURIComponent(`ExamPro: ${assignment.title}`);
+    const details = encodeURIComponent(assignment.instructions || `Please log in to ExamPro to take your ${assignment.title} assignment.`);
+
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}`;
+  };
+
   const handleStartAssignment = (assignment) => {
     const baseStream = streams.find(s => s.id === assignment.streamId);
     if (!baseStream) {
@@ -386,21 +400,44 @@ export default function StreamSelection({ streams, onSelect, user }) {
                       Questions: <strong>{assignment.customQuestions?.length || 'Stream Default'}</strong> | Duration: <strong>{streams.find(s => s.id === assignment.streamId)?.duration || 180} mins</strong>
                     </div>
 
-                    <button 
-                      className={`btn ${buttonClass}`}
-                      disabled={isButtonDisabled}
-                      onClick={() => handleStartAssignment(assignment)}
-                      style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '0.25rem',
-                        background: !isButtonDisabled ? 'var(--warning)' : undefined,
-                        borderColor: !isButtonDisabled ? 'var(--warning)' : undefined,
-                        color: !isButtonDisabled ? 'white' : undefined,
-                      }}
-                    >
-                      {buttonText} <ArrowRight size={14} />
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      {!isCompleted && !isEnded && (
+                        <a 
+                          href={generateGoogleCalendarUrl(assignment)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-outline"
+                          title="Add to Google Calendar"
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            padding: '0.5rem',
+                            color: '#4285F4',
+                            borderColor: 'rgba(66, 133, 244, 0.3)',
+                            background: 'rgba(66, 133, 244, 0.05)'
+                          }}
+                        >
+                          <Calendar size={18} />
+                        </a>
+                      )}
+
+                      <button 
+                        className={`btn ${buttonClass}`}
+                        disabled={isButtonDisabled}
+                        onClick={() => handleStartAssignment(assignment)}
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '0.25rem',
+                          background: !isButtonDisabled ? 'var(--warning)' : undefined,
+                          borderColor: !isButtonDisabled ? 'var(--warning)' : undefined,
+                          color: !isButtonDisabled ? 'white' : undefined,
+                        }}
+                      >
+                        {buttonText} <ArrowRight size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
