@@ -1,6 +1,6 @@
 import { Shield, BarChart3, Clock, ArrowRight, BookOpen, Lock, Sparkles, BrainCircuit } from 'lucide-react';
 
-export default function LandingPage({ onGetStarted }) {
+export default function LandingPage({ onStudentLogin, onFacultyLogin }) {
   return (
     <div style={{ position: 'relative', overflow: 'hidden', minHeight: '100vh', width: '100%', margin: '-2rem' }}>
       
@@ -82,7 +82,7 @@ export default function LandingPage({ onGetStarted }) {
           
           <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <button 
-              onClick={onGetStarted}
+              onClick={onStudentLogin}
               style={{ 
                 padding: '1rem 2.5rem', 
                 fontSize: '1.125rem', 
@@ -101,10 +101,10 @@ export default function LandingPage({ onGetStarted }) {
               onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 15px 30px -5px rgba(37, 99, 235, 0.5)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(37, 99, 235, 0.4)'; }}
             >
-              Start Free Trial <ArrowRight size={20} />
+              Student Login <ArrowRight size={20} />
             </button>
             <button 
-              onClick={onGetStarted}
+              onClick={onFacultyLogin}
               style={{ 
                 padding: '1rem 2.5rem', 
                 fontSize: '1.125rem', 
@@ -120,7 +120,7 @@ export default function LandingPage({ onGetStarted }) {
               onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg)'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'var(--card)'}
             >
-              Login as Faculty
+              Faculty Login
             </button>
           </div>
         </section>
@@ -188,7 +188,7 @@ export default function LandingPage({ onGetStarted }) {
               Join thousands of students and faculty members who trust ProExam to deliver the most accurate testing experience available.
             </p>
             <button 
-              onClick={onGetStarted}
+              onClick={onStudentLogin}
               style={{ 
                 padding: '1rem 3rem', 
                 fontSize: '1.125rem', 

@@ -324,7 +324,20 @@ function App() {
       </header>
       
       <main>
-        {!user && !started && <LandingPage onGetStarted={() => { setStarted(true); window.history.pushState({}, '', '/student'); }} />}
+        {!user && !started && (
+          <LandingPage 
+            onStudentLogin={() => { 
+              setStarted(true); 
+              setShowTeacher(false); 
+              window.history.pushState({}, '', '/student'); 
+            }} 
+            onFacultyLogin={() => { 
+              setStarted(true); 
+              setShowTeacher(true); 
+              window.history.pushState({}, '', '/techer'); 
+            }} 
+          />
+        )}
         {!user && started && (
           <Login 
             onLogin={handleLogin} 
