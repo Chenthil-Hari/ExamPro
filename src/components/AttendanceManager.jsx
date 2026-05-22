@@ -138,7 +138,6 @@ export default function AttendanceManager({ user }) {
   }
 
   return (
-  return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
         <div style={{ padding: '0.75rem', background: 'rgba(99,102,241,0.1)', borderRadius: '0.5rem', color: 'var(--primary)' }}>
