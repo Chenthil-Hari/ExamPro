@@ -1,6 +1,6 @@
 import { API_URL } from '../config';
 import { useState, useEffect } from 'react';
-import { Loader2, Award, AlertTriangle, CheckCircle, ArrowLeft, TrendingUp } from 'lucide-react';
+import { Loader2, Award, AlertTriangle, CheckCircle, ArrowLeft, TrendingUp, BarChart2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 
 export default function FacultyAnalytics({ user }) {
