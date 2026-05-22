@@ -328,14 +328,32 @@ app.post('/api/upload', async (req, res) => {
     if (!fileBase64) {
       return res.status(400).json({ success: false, error: 'No file data provided' });
     }
-    const ext = fileName ? path.extname(fileName).replace('.', '') : 'bin';
-    const uploadResult = await cloudinary.uploader.upload(fileBase64, {
-      folder: 'exampro/uploads',
-      resource_type: 'raw',
-      format: ext
+    
+    // Extract base64 data reliably
+    const base64Data = fileBase64.includes('base64,') ? fileBase64.split('base64,')[1] : fileBase64;
+    const ext = fileName ? path.extname(fileName).replace('.', '') : 'pdf';
+    const baseName = fileName ? path.parse(fileName).name.replace(/[^a-zA-Z0-9]/g, '_') : 'file';
+
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'exampro/uploads',
+          resource_type: 'raw',
+          public_id: `${Date.now()}-${baseName}`,
+          format: ext
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      // Write the binary buffer to the stream
+      uploadStream.end(Buffer.from(base64Data, 'base64'));
     });
+
     res.json({ success: true, url: uploadResult.secure_url });
   } catch (error) {
+    console.error('Upload Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
