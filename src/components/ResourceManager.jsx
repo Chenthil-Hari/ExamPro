@@ -12,11 +12,8 @@ export default function ResourceManager({ user }) {
   const [loading, setLoading] = useState(false);
   const [loadingResources, setLoadingResources] = useState(false);
 
-  // Add form state
   const [title, setTitle] = useState('');
-  const [type, setType] = useState('link');
   const [url, setUrl] = useState('');
-  const [file, setFile] = useState(null);
 
   // Edit modal state
   const [editingRes, setEditingRes] = useState(null); // resource being edited
@@ -31,7 +28,6 @@ export default function ResourceManager({ user }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const fileInputRef = useRef(null);
   const apiUrl = API_URL;
 
   // Auto-dismiss success messages
@@ -77,56 +73,6 @@ export default function ResourceManager({ user }) {
     fetchResources();
   }, [selectedBatch, apiUrl]);
 
-  // ─── Upload File ────────────────────────────────────────────────────────────
-  const handleUploadFile = async () => {
-    if (!file || !title || !selectedBatch) {
-      setError('Please provide a title, select a file, and choose a batch.');
-      return;
-    }
-    try {
-      setLoading(true);
-      setError('');
-      setSuccess('');
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const fileBase64 = reader.result;
-          const res = await fetch(`${apiUrl}/teacher/resources/upload-base64`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              batchId: selectedBatch, title,
-              uploadedBy: user.userId || user.id,
-              fileBase64, fileName: file.name
-            })
-          });
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.error || res.statusText);
-          }
-          const data = await res.json();
-          if (data.success) {
-            setSuccess('File uploaded successfully!');
-            setResources([data.resource, ...resources]);
-            setTitle(''); setFile(null);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-          } else {
-            setError(data.error || 'Upload failed');
-          }
-        } catch (err) {
-          setError('Failed to upload file. ' + err.message);
-        } finally {
-          setLoading(false);
-        }
-      };
-      reader.onerror = () => { setError('Failed to read the file locally.'); setLoading(false); };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      setError('Failed to process upload request.');
-      setLoading(false);
-    }
-  };
-
   // ─── Share Link ─────────────────────────────────────────────────────────────
   const handleShareLink = async () => {
     if (!url || !title || !selectedBatch) {
@@ -157,8 +103,7 @@ export default function ResourceManager({ user }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (type === 'file') handleUploadFile();
-    else handleShareLink();
+    handleShareLink();
   };
 
   // ─── Delete ─────────────────────────────────────────────────────────────────
@@ -362,38 +307,21 @@ export default function ResourceManager({ user }) {
               </select>
             </div>
 
-            <div>
-              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>RESOURCE TYPE</label>
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
-                  <input type="radio" checked={type === 'link'} onChange={() => setType('link')} /> Link / URL
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer' }}>
-                  <input type="radio" checked={type === 'file'} onChange={() => setType('file')} /> File Upload
-                </label>
-              </div>
-            </div>
+
 
             <div>
               <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>TITLE / DESCRIPTION</label>
               <input type="text" className="input" placeholder="e.g. Chapter 4 Thermodynamics Notes" value={title} onChange={e => setTitle(e.target.value)} required />
             </div>
 
-            {type === 'link' ? (
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>EXTERNAL URL</label>
-                <input type="url" className="input" placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} required />
-              </div>
-            ) : (
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>FILE (PDF, PPT, DOCX)</label>
-                <input type="file" className="input" ref={fileInputRef} onChange={e => setFile(e.target.files[0])} required />
-              </div>
-            )}
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-muted)' }}>EXTERNAL URL</label>
+              <input type="url" className="input" placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} required />
+            </div>
 
             <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-              {loading ? <Loader2 className="spin" size={18} /> : type === 'link' ? <LinkIcon size={18} /> : <Upload size={18} />}
-              {loading ? 'Uploading…' : type === 'link' ? 'Share Link' : 'Upload File'}
+              {loading ? <Loader2 className="spin" size={18} /> : <LinkIcon size={18} />}
+              {loading ? 'Sharing…' : 'Share Link'}
             </button>
           </form>
         </div>
