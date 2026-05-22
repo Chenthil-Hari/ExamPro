@@ -64,29 +64,43 @@ export default function CommunityForum({ user }) {
 
     try {
       setUploadingFile(true);
-      const formData = new FormData();
-      formData.append('file', file);
-
-      // Endpoint path relative helper:
-      const baseApiUrl = apiUrl.replace(/\/api$/, '');
-      const res = await fetch(`${baseApiUrl}/api/upload`, {
-        method: 'POST',
-        body: formData
-      });
-      const data = await res.json();
-      if (data.success) {
-        if (type === 'question') {
-          setQuestionAttachment(data.url);
+      
+      // Convert to Base64
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        const fileBase64 = reader.result;
+        
+        const baseApiUrl = apiUrl.replace(/\/api$/, '');
+        const res = await fetch(`${baseApiUrl}/api/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileBase64,
+            fileName: file.name
+          })
+        });
+        
+        const data = await res.json();
+        if (data.success) {
+          if (type === 'question') {
+            setQuestionAttachment(data.url);
+          } else {
+            setAnswerAttachment(data.url);
+          }
         } else {
-          setAnswerAttachment(data.url);
+          alert('Upload failed: ' + data.error);
         }
-      } else {
-        alert('Upload failed: ' + data.error);
-      }
+        setUploadingFile(false);
+      };
+      
+      reader.onerror = () => {
+        alert('Failed to read file');
+        setUploadingFile(false);
+      };
     } catch (err) {
       console.error(err);
       alert('Error uploading file');
-    } finally {
       setUploadingFile(false);
     }
   };
